@@ -1,0 +1,7 @@
+rules:
+  - id: pref_783c4e2dd6ea08da
+    active: true
+    scope: document
+    rule: 禁止使用自定义组件 'x-card' 来展示代码块信息。
+    feedback: 展示代码块的信息，不可以使用自定义组件 x-card
+    createdAt: 2025-09-02T09:15:46.482Z
