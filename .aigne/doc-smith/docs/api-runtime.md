@@ -1,300 +1,245 @@
 # Runtime
 
-The Tokio runtime provides an I/O driver, task scheduler, timer, and blocking pool necessary for running asynchronous tasks. It bundles these services into a single type, allowing them to be started, shut down, and configured together.
+The Tokio runtime is the engine that powers asynchronous applications. It provides essential services like an I/O event loop, a task scheduler, a timer, and a thread pool for blocking operations. This section provides detailed API documentation for manually configuring and interacting with the runtime.
 
-For most applications, the `#[tokio::main]` attribute macro is the easiest way to get started, as it creates and manages a `Runtime` automatically. However, for more advanced configuration, you can build a `Runtime` instance manually using the `Builder`.
+For a higher-level conceptual overview, please see [The Runtime](./concepts-runtime.md) in our Core Concepts guide.
 
-For a deeper understanding of the runtime's role and architecture, see the [runtime concepts page](./concepts-runtime.md).
+## Core Components
+
+A Tokio runtime bundles several key components that work together to execute asynchronous tasks.
+
+```d2
+direction: down
+
+"Tokio Runtime": {
+  shape: package
+  grid-columns: 2
+  grid-gap: 50
+
+  "Task Scheduler": {
+    shape: rectangle
+    "Manages and executes asynchronous tasks."
+  }
+
+  "I/O Driver (Reactor)": {
+    shape: rectangle
+    "Interfaces with the OS for non-blocking I/O."
+  }
+
+  "Timer": {
+    shape: rectangle
+    "Provides utilities like `sleep` and `interval`."
+  }
+
+  "Blocking Pool": {
+    shape: rectangle
+    "A dedicated thread pool for blocking operations."
+  }
+}
+
+"Your Async Code": {
+  shape: rectangle
+}
+
+"Your Async Code" -> "Tokio Runtime": "Spawns tasks & uses resources"
+
+"Tokio Runtime"."Task Scheduler" <-> "Tokio Runtime"."I/O Driver (Reactor)": "Wakes tasks on I/O events"
+"Tokio Runtime"."Task Scheduler" <-> "Tokio Runtime"."Timer": "Wakes tasks on timeout"
+"Tokio Runtime"."Task Scheduler" -> "Tokio Runtime"."Blocking Pool": "Offloads blocking calls"
+
+```
 
 ## Runtime
 
-The `Runtime` struct is the main entry point for the Tokio runtime. It encapsulates all the necessary components for executing asynchronous code.
+The `Runtime` struct is the main entry point. It encapsulates all the runtime services. While many applications can rely on the `#[tokio::main]` macro, creating a `Runtime` instance directly offers fine-grained control.
+
+### Creating a Runtime
+
+The simplest way to create a multi-threaded runtime with default settings is with `Runtime::new()`.
 
 ```rust
 use tokio::runtime::Runtime;
 
-// Create a new runtime with default configuration
-let rt = Runtime::new().unwrap();
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Create a new runtime with default configurations.
+    let rt = Runtime::new()?;
 
-// Use the runtime to block on a future
-rt.block_on(async {
-    println!("Hello from the runtime!");
-});
+    // Use the runtime to block on a future.
+    rt.block_on(async {
+        println!("Hello from the Tokio runtime!");
+    });
+
+    Ok(())
+}
 ```
+
+### Core Methods
+
+<x-cards>
+  <x-card data-title="block_on" data-icon="lucide:arrow-down-square">
+    Runs a future to completion on the runtime, blocking the current thread until the future resolves.
+  </x-card>
+  <x-card data-title="spawn" data-icon="lucide:send">
+    Spawns a new asynchronous task to be executed on the runtime.
+  </x-card>
+  <x-card data-title="spawn_blocking" data-icon="lucide:box">
+    Runs a blocking function on a dedicated thread pool, preventing it from blocking the async scheduler.
+  </x-card>
+  <x-card data-title="handle" data-icon="lucide:grip">
+    Returns a `Handle` to the runtime, which can be cloned and sent to other threads.
+  </x-card>
+</x-cards>
 
 ### Shutdown
 
-Shutting down the runtime is done by dropping the `Runtime` value or by calling `shutdown_background` or `shutdown_timeout`. When a runtime is dropped, the thread initiating the shutdown blocks until all spawned work has been stopped. This can take an indefinite amount of time. The `shutdown_timeout` method allows specifying a maximum duration to wait.
-
-### Sharing
-
-Access to a `Runtime` can be shared across threads in several ways:
-- **`Arc<Runtime>`**: A shared pointer that prevents the runtime from shutting down as long as a reference exists.
-- **`Handle`**: A lightweight, cloneable handle that allows spawning tasks and entering the runtime context without preventing shutdown. See the `Handle` section below for more details.
-- **Entering the context**: The `enter` method provides a context guard, allowing Tokio functions like `tokio::spawn` to work within its scope.
-
-### Methods
-
-#### new() -> Result<Runtime, io::Error>
-Creates a new `Runtime` instance with a default multi-threaded scheduler and all drivers enabled.
+Shutting down the runtime is accomplished by dropping the `Runtime` value. The `drop` implementation will block the current thread until all spawned work has been stopped. For non-blocking shutdown or shutdown with a timeout, you can use `shutdown_background()` or `shutdown_timeout()`.
 
 ```rust
 use tokio::runtime::Runtime;
-
-let rt = Runtime::new().unwrap();
-```
-
-#### handle(&self) -> &Handle
-Returns a handle to the runtime, which can be cloned and sent to other threads to interact with the runtime.
-
-```rust
-use tokio::runtime::Runtime;
-
-let rt = Runtime::new().unwrap();
-let handle = rt.handle();
-```
-
-#### spawn<F>(&self, future: F) -> JoinHandle<F::Output>
-Spawns a future onto the runtime. The future must be `Send`.
-
-```rust
-use tokio::runtime::Runtime;
-
-let rt = Runtime::new().unwrap();
-rt.spawn(async {
-    println!("Task running on the runtime.");
-});
-```
-
-#### spawn_blocking<F, R>(&self, func: F) -> JoinHandle<R>
-Runs a blocking function on a dedicated thread pool for blocking operations.
-
-```rust
-use tokio::runtime::Runtime;
-
-let rt = Runtime::new().unwrap();
-rt.spawn_blocking(|| {
-    // This is a blocking operation
-    std::thread::sleep(std::time::Duration::from_secs(1));
-    println!("Blocking task complete.");
-});
-```
-
-#### block_on<F: Future>(&self, future: F) -> F::Output
-Runs a future to completion on the current thread, blocking until it finishes. This is the main entry point for a runtime.
-
-```rust
-use tokio::runtime::Runtime;
-
-let rt = Runtime::new().unwrap();
-let result = rt.block_on(async {
-    42
-});
-assert_eq!(result, 42);
-```
-
-#### enter(&self) -> EnterGuard<'_>
-Enters the runtime context. While the returned `EnterGuard` is in scope, functions like `tokio::spawn` will use this runtime.
-
-```rust
-use tokio::runtime::Runtime;
-
-fn some_function() {
-    // This would panic if not inside a runtime context
-    tokio::spawn(async { println!("Spawned!"); });
-}
-
-let rt = Runtime::new().unwrap();
-let _guard = rt.enter(); // Enter the context
-some_function();
-// Guard is dropped, context is exited
-```
-
-#### shutdown_timeout(self, duration: Duration)
-Shuts down the runtime, waiting for at most `duration` for all spawned work to stop. Any work that doesn't stop in time is leaked.
-
-```rust
-use tokio::runtime::Runtime;
+use tokio::task;
+use std::thread;
 use std::time::Duration;
 
-let rt = Runtime::new().unwrap();
-// ... spawn tasks ...
-rt.shutdown_timeout(Duration::from_millis(100));
-```
+fn main() {
+   let runtime = Runtime::new().unwrap();
 
-#### shutdown_background(self)
-Shuts down the runtime without waiting for any spawned work to stop. This is useful for dropping a runtime from within another asynchronous context.
+   runtime.block_on(async move {
+       task::spawn_blocking(move || {
+           // Simulate a long-running blocking task
+           thread::sleep(Duration::from_secs(10));
+       });
+   });
 
-```rust
-use tokio::runtime::Runtime;
-
-let rt = Runtime::new().unwrap();
-rt.block_on(async {
-    let inner_rt = Runtime::new().unwrap();
-    // ...
-    inner_rt.shutdown_background();
-});
+   // Shutdown with a 100ms timeout. The blocking task will be leaked.
+   runtime.shutdown_timeout(Duration::from_millis(100));
+}
 ```
 
 ## Builder
 
-The `Builder` provides a way to configure a `Runtime` before creating it. You can select the scheduler type, configure worker threads, enable or disable drivers, and set up lifecycle hooks.
+The `Builder` provides a flexible way to configure a new `Runtime` instance. You can select the scheduler type, configure worker threads, enable/disable drivers, and set up lifecycle hooks.
+
+### Creating a Builder
+
+You can start building a runtime for either a multi-threaded or a current-thread scheduler.
+
+-   `Builder::new_multi_thread()`: Creates a builder for the work-stealing multi-threaded scheduler. This is suitable for most applications.
+-   `Builder::new_current_thread()`: Creates a builder for a single-threaded scheduler that runs all tasks on the current thread.
+
+### Configuration Example
+
+Here is an example of creating a custom multi-threaded runtime.
 
 ```rust
 use tokio::runtime::Builder;
+use std::time::Duration;
 
-let runtime = Builder::new_multi_thread()
-    .worker_threads(4)
-    .thread_name("my-runtime-worker")
-    .enable_all()
-    .build()
-    .unwrap();
+fn main() {
+    let runtime = Builder::new_multi_thread()
+        .worker_threads(4) // Set the number of worker threads
+        .thread_name("my-tokio-worker") // Set a name for the worker threads
+        .thread_stack_size(3 * 1024 * 1024) // Set the stack size for worker threads
+        .enable_all() // Enable both I/O and time drivers
+        .build() // Build the runtime
+        .unwrap();
 
-runtime.block_on(async {
-    println!("Hello from a custom-built runtime!");
-});
+    runtime.block_on(async {
+        println!("Running on a custom-configured runtime!");
+    });
+}
 ```
 
-### Methods
-
-#### Creating a Builder
+### Common Configuration Methods
 
 | Method | Description |
 |---|---|
-| `new_multi_thread()` | Creates a builder for the multi-threaded, work-stealing scheduler. |
-| `new_current_thread()` | Creates a builder for the single-threaded scheduler. |
-
-#### Configuring Threads
-
-| Method | Description |
-|---|---|
-| `worker_threads(val: usize)` | Sets the number of worker threads for the multi-thread scheduler. Panics if `val` is 0. |
-| `max_blocking_threads(val: usize)` | Sets the maximum number of threads for the blocking thread pool. Defaults to 512. |
-| `thread_name(val: impl Into<String>)` | Sets a static name for all threads spawned by the runtime. |
-| `thread_name_fn<F>(f: F)` | Sets a function that generates a name for each new thread. |
-| `thread_stack_size(val: usize)` | Sets the stack size (in bytes) for worker threads. |
-| `thread_keep_alive(duration: Duration)` | Sets a custom timeout for idle threads in the blocking pool. |
-
-#### Configuring Drivers and Schedulers
-
-| Method | Description |
-|---|---|
-| `enable_all()` | Enables both I/O and time drivers. |
-| `enable_io()` | Enables the I/O driver (for networking, processes, signals). |
-| `enable_time()` | Enables the time driver (for `tokio::time`). |
-| `event_interval(val: u32)` | Sets how often the scheduler checks for external events (I/O, timers). Default is 61 ticks. |
-| `global_queue_interval(val: u32)` | Sets how often the scheduler polls the global task queue. |
-
-#### Lifecycle and Task Hooks
-These methods allow you to execute custom code at different points in the runtime and task lifecycle. They are primarily used for monitoring and bookkeeping.
-
-| Method | Description |
-|---|---|
-| `on_thread_start<F>(f: F)` | Executes a function after each worker thread is started. |
-| `on_thread_stop<F>(f: F)` | Executes a function before each worker thread stops. |
-| `on_thread_park<F>(f: F)` | Executes a function just before a worker thread goes idle. |
-| `on_thread_unpark<F>(f: F)` | Executes a function just after a worker thread becomes active. |
-
-#### Building the Runtime
-
-| Method | Description |
-|---|---|
-| `build() -> io::Result<Runtime>` | Creates the configured `Runtime` instance. |
+| `enable_all()` | Enables both I/O and time drivers. A convenient shorthand. |
+| `enable_io()` | Enables the I/O driver for networking, processes, and signals. |
+| `enable_time()` | Enables the time driver for utilities like `sleep`, `interval`, and `timeout`. |
+| `worker_threads(usize)` | Sets the number of worker threads for the multi-thread scheduler. |
+| `max_blocking_threads(usize)` | Sets the maximum number of threads in the blocking pool. |
+| `thread_name(impl Into<String>)` | Sets a static name for threads spawned by the runtime. |
+| `thread_keep_alive(Duration)` | Sets a custom keep-alive timeout for threads in the blocking pool. |
+| `on_thread_start(F)` | Executes a function after each worker thread starts. |
 
 ## Handle
 
-A `Handle` is a lightweight, cloneable reference to a `Runtime`. It allows you to interact with the runtime (e.g., spawn tasks) from any thread that has a handle, without needing ownership of the `Runtime` object itself.
+A `Handle` is a cloneable, reference-counted handle to a `Runtime`. It allows you to interact with the runtime (e.g., spawn tasks) from any thread that has a handle, without needing a reference to the `Runtime` instance itself.
 
-### Methods
+### Obtaining a Handle
 
-#### current() -> Handle
-Returns a handle to the currently running runtime. Panics if called outside of a Tokio runtime context.
+There are two primary ways to get a `Handle`:
 
-```rust
-#[tokio::main]
-async fn main() {
-    let handle = tokio::runtime::Handle::current();
-    handle.spawn(async { /* ... */ });
-}
-```
-
-#### try_current() -> Result<Handle, TryCurrentError>
-Returns a handle to the currently running runtime, or an error if not in a runtime context. This method does not panic.
+1.  **From an existing `Runtime`**: `runtime.handle()`
+2.  **From within a runtime context**: `Handle::current()`
 
 ```rust
-use tokio::runtime::Handle;
+use tokio::runtime::{Handle, Runtime};
 
-if let Ok(handle) = Handle::try_current() {
-    println!("Running inside a Tokio runtime.");
-} else {
-    println!("Not running inside a Tokio runtime.");
-}
-```
+fn main() {
+    let rt = Runtime::new().unwrap();
 
-#### enter(&self) -> EnterGuard<'_'>
-Enters the runtime context associated with this handle. See `Runtime::enter` for more details.
+    // 1. Get a handle from the runtime instance
+    let handle_from_rt = rt.handle().clone();
 
-#### spawn<F>(&self, future: F) -> JoinHandle<F::Output>
-Spawns a future onto the runtime associated with this handle.
+    rt.block_on(async {
+        // 2. Get a handle from the current runtime context
+        let handle_from_context = Handle::current();
 
-```rust
-#[tokio::main]
-async fn main() {
-    let handle = tokio::runtime::Handle::current();
-    let join_handle = handle.spawn(async {
-        "Hello from a spawned task!"
-    });
-    let result = join_handle.await.unwrap();
-    println!("{}", result);
-}
-```
-
-#### spawn_blocking<F, R>(&self, func: F) -> JoinHandle<R>
-Runs a blocking function on the runtime's blocking thread pool.
-
-```rust
-#[tokio::main]
-async fn main() {
-    let handle = tokio::runtime::Handle::current();
-    let join_handle = handle.spawn_blocking(|| {
-        // Blocking I/O or CPU-intensive work
-        "done"
-    });
-    let result = join_handle.await.unwrap();
-    assert_eq!(result, "done");
-}
-```
-
-#### block_on<F: Future>(&self, future: F) -> F::Output
-Blocks the current thread until the provided future completes. This is useful for running async code from a synchronous context when you have a `Handle`.
-
-```rust
-use tokio::runtime::Handle;
-
-#[tokio::main]
-async fn main() {
-    let handle = Handle::current();
-    std::thread::spawn(move || {
-        // Use the handle to block on an async task in a new synchronous thread.
-        handle.block_on(async {
-            println!("Running async code in another thread");
+        handle_from_context.spawn(async {
+            println!("Task spawned from a handle!");
         });
-    }).join().unwrap();
+    });
 }
 ```
 
-#### runtime_flavor(&self) -> RuntimeFlavor
-Returns the flavor of the runtime, indicating whether it is a `CurrentThread` or `MultiThread` scheduler.
+`Handle::current()` will panic if called outside of a Tokio runtime context. For cases where a runtime may not be active, `Handle::try_current()` returns a `Result` instead.
 
-## Other Types
+### Using a Handle
+
+A `Handle` provides similar methods to `Runtime` for spawning tasks and blocking on futures.
+
+-   `handle.spawn(future)`: Spawns a task on the associated runtime.
+-   `handle.spawn_blocking(f)`: Spawns a blocking task on the runtime's blocking pool.
+-   `handle.block_on(future)`: Blocks the current thread and runs a future to completion. Note that on a `current_thread` runtime, this method cannot drive I/O or timers; only `Runtime::block_on` can.
+-   `handle.enter()`: Enters the runtime context, returning an `EnterGuard`. This is necessary when you need to create I/O or timer-based types outside of an `async` block.
+
+```rust
+use tokio::runtime::{Handle, Runtime};
+use tokio::task::JoinHandle;
+use tokio::time::{sleep, Duration};
+
+// This function requires a runtime context to spawn a task.
+fn function_that_spawns(msg: String) -> JoinHandle<()> {
+    tokio::spawn(async move {
+        println!("{}", msg);
+        sleep(Duration::from_millis(10)).await;
+    })
+}
+
+fn main() {
+    let rt = Runtime::new().unwrap();
+
+    let s = "Hello from outside the runtime context!".to_string();
+
+    // Enter the runtime context to call `tokio::spawn`.
+    let _guard = rt.enter();
+    let handle = function_that_spawns(s);
+
+    // Block on the handle to wait for the task to complete.
+    rt.block_on(handle).unwrap();
+}
+```
 
 ### RuntimeFlavor
-An enum that indicates the scheduling strategy of a `Runtime`.
-- `CurrentThread`: A single-threaded scheduler that runs all tasks on the current thread.
-- `MultiThread`: A multi-threaded, work-stealing scheduler.
 
-### EnterGuard
-An RAII guard returned by `Runtime::enter` and `Handle::enter`. The runtime context is active as long as this guard is in scope. It is important to drop guards in the reverse order they were created to avoid panics.
+You can determine the type of scheduler the runtime is using via `handle.runtime_flavor()`.
 
-### TryCurrentError
-An error type returned by `Handle::try_current` when a handle to the current runtime cannot be obtained.
+```rust
+use tokio::runtime::{Handle, RuntimeFlavor};
+
+#[tokio::main(flavor = "current_thread")]
+async fn main() {
+  assert_eq!(RuntimeFlavor::CurrentThread, Handle::current().runtime_flavor());
+}
+```

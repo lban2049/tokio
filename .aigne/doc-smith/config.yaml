@@ -2,7 +2,7 @@
 projectName: tokio
 projectDesc: A runtime for writing reliable asynchronous applications with Rust.
   Provides I/O, networking, scheduling, timers, ...
-projectLogo: https://avatars.githubusercontent.com/u/80030640?v=4
+projectLogo: https://avatars.githubusercontent.com/u/20248544?s=48&v=4
 
 # =============================================================================
 # Documentation Configuration
@@ -65,6 +65,6 @@ docsDir: .aigne/doc-smith/docs # Directory to save generated documentation
 sourcesPath: # Source code paths to analyze
   - ./tokio
   - ./README.md
-lastGitHead: adc3e19ba7467a192ae9ef2379549bac03e2ca1c
+lastGitHead: e1cd4e814a8733b5aa025d4207a90df0c904a6be
 appUrl: https://docsmith.aigne.io
 boardId: tokio

@@ -1,182 +1,167 @@
 # Networking
 
-This module provides asynchronous TCP, UDP, and Unix socket bindings for Tokio, enabling the development of high-performance networking applications. These components are designed to be analogous to their counterparts in the standard library but operate in a non-blocking manner, integrating seamlessly with the Tokio runtime.
+This module provides asynchronous TCP, UDP, and Unix socket bindings for Tokio. These components are designed to feel similar to their counterparts in the Rust standard library but are non-blocking and integrate with the Tokio runtime.
 
-## Overview
+## Overview of Networking Primitives
 
-Tokio's networking primitives cover the most common protocols and inter-process communication (IPC) mechanisms. Here's a visual breakdown of the key components and their relationships:
+Tokio's `net` module is organized by protocol, offering a range of types for different communication needs.
 
 ```d2
 direction: down
 
-"Network Application": {
-  "TCP Server": {
-    "TcpListener" -> "TcpStream" : accepts
-  }
-  
-  "TCP Client": {
-    "TcpStream"
+"tokio::net": {
+  shape: package
+  grid-columns: 3
+  grid-gap: 50
+
+  "TCP (Connection-Oriented)": {
+    shape: rectangle
+    "TcpListener": "Accepts incoming connections"
+    "TcpStream": "Represents a TCP stream"
+    "TcpSocket": "Low-level socket configuration"
   }
 
-  "UDP Peer": {
-    "UdpSocket"
-  }
-  
-  "Unix Domain Server": {
-    "UnixListener" -> "UnixStream" : accepts
+  "UDP (Connectionless)": {
+    shape: rectangle
+    "UdpSocket": "Sends/receives datagrams"
   }
 
-  "Unix Domain Client": {
-    "UnixStream"
+  "IPC (Unix-like Systems)": {
+    shape: rectangle
+    "UnixListener": "Stream-based listener"
+    "UnixStream": "Stream connection"
+    "UnixDatagram": "Datagram socket"
+    "Pipes": "FIFO pipes"
   }
 }
-
-"Remote Peers": {
-  "Remote TCP Peer 1"
-  "Remote TCP Peer 2"
-  "Remote UDP Peer A"
-  "Remote UDP Peer B"
-}
-
-"Local Processes": {
-  "Process A"
-  "Process B"
-}
-
-"Network Application"."TCP Client"."TcpStream" <-> "Remote Peers"."Remote TCP Peer 1": TCP Connection
-"Network Application"."TCP Server"."TcpStream" <-> "Remote Peers"."Remote TCP Peer 2": TCP Connection
-"Network Application"."UDP Peer"."UdpSocket" <-> "Remote Peers"."Remote UDP Peer A": UDP Datagrams
-"Network Application"."UDP Peer"."UdpSocket" <-> "Remote Peers"."Remote UDP Peer B": UDP Datagrams
-"Network Application"."Unix Domain Client"."UnixStream" <-> "Local Processes"."Process A": IPC
-"Network Application"."Unix Domain Server"."UnixStream" <-> "Local Processes"."Process B": IPC
 ```
 
-## Core Components
-
-The `tokio::net` module is organized by protocol. Here are the primary types you will work with:
+Below is a quick guide to the primary components available for building your networking protocols.
 
 <x-cards data-columns="2">
-  <x-card data-title="TCP Sockets" data-icon="lucide:arrow-right-left">
-    Provides `TcpListener` to accept incoming stream connections and `TcpStream` for communication over TCP. Ideal for reliable, connection-oriented protocols like HTTP.
+  <x-card data-title="TCP" data-icon="lucide:server">
+    For reliable, stream-oriented communication. Includes `TcpListener` for accepting connections and `TcpStream` for data transfer.
   </x-card>
-  <x-card data-title="UDP Sockets" data-icon="lucide:move-diagonal">
-    Provides `UdpSocket` for connectionless, datagram-based communication over UDP. Suitable for applications where speed is preferred over reliability, like gaming or streaming.
+  <x-card data-title="UDP" data-icon="lucide:send">
+    For connectionless, datagram-based communication. `UdpSocket` can be used to send and receive data to and from multiple remotes.
   </x-card>
-  <x-card data-title="Unix Domain Sockets" data-icon="lucide:server">
-    Stream and datagram sockets for inter-process communication (IPC) on Unix-based systems. Includes `UnixListener`, `UnixStream`, and `UnixDatagram`.
+  <x-card data-title="Unix Domain Sockets" data-icon="lucide:box">
+    For inter-process communication (IPC) on Unix-like systems. Provides stream (`UnixListener`, `UnixStream`) and datagram (`UnixDatagram`) variants.
   </x-card>
-  <x-card data-title="Pipes" data-icon="lucide:pipeline">
-    Platform-specific pipes for IPC. This includes `tokio::net::unix::pipe` for FIFO pipes on Unix and `tokio::net::windows::named_pipe` on Windows.
+  <x-card data-title="Pipes" data-icon="lucide:workflow">
+    For platform-specific pipe-based communication, such as FIFO pipes on Unix and Named Pipes on Windows.
   </x-card>
 </x-cards>
 
 ## TCP (Transmission Control Protocol)
 
-TCP provides reliable, ordered, and error-checked delivery of a stream of bytes. Tokio offers two primary types for TCP networking:
+TCP provides a reliable, ordered, and error-checked stream of bytes between applications. It's the foundation for many internet protocols like HTTP and FTP.
 
--   **`TcpListener`**: An asynchronous version of `std::net::TcpListener`. It is used to listen for and accept incoming TCP connections.
--   **`TcpStream`**: An asynchronous TCP stream between a local and a remote socket. It implements `AsyncRead` and `AsyncWrite` for sending and receiving data.
--   **`TcpSocket`**: A lower-level socket that allows for configuration (e.g., setting `SO_REUSEADDR`) before it is used to connect or listen.
+-   **`TcpListener`**: An asynchronous listener for accepting incoming TCP connections.
+-   **`TcpStream`**: Represents a TCP connection between a local and remote socket. It can be split into owned read and write halves.
+-   **`TcpSocket`**: A lower-level utility for creating and configuring a TCP socket before it starts listening or connecting.
 
-## UDP (User Datagram Protocol)
+### Example: TCP Echo Server
 
-UDP is a connectionless protocol that provides a datagram-based communication service. It prioritizes speed and low latency over reliability.
+Here is a simple example of a TCP echo server that accepts a connection and echoes back any data it receives.
 
-### Usage Patterns
-
-A `UdpSocket` can be used in two primary ways:
-
-1.  **One-to-Many (Unconnected)**: Bind a socket to an address and use `send_to` and `recv_from` to communicate with multiple remote peers. This is the typical use case for a server that handles many clients.
-
-    *Example: An echo server handling multiple clients.*
-    ```rust
-    use tokio::net::UdpSocket;
-    use std::io;
-    
-    #[tokio::main]
-    async fn main() -> io::Result<()> {
-        let sock = UdpSocket::bind("0.0.0.0:8080").await?;
-        let mut buf = [0; 1024];
-        loop {
-            let (len, addr) = sock.recv_from(&mut buf).await?;
-            println!("{:?} bytes received from {:?}", len, addr);
-    
-            let len = sock.send_to(&buf[..len], addr).await?;
-            println!("{:?} bytes sent", len);
-        }
-    }
-    ```
-
-2.  **One-to-One (Connected)**: Associate a socket with a single remote address using `connect`. Once connected, you can use the more convenient `send` and `recv` methods, and the socket will only send to and receive from that specific peer.
-
-    *Example: An echo client connected to a single server.*
-    ```rust
-    use tokio::net::UdpSocket;
-    use std::io;
-    
-    #[tokio::main]
-    async fn main() -> io::Result<()> {
-        let sock = UdpSocket::bind("0.0.0.0:8080").await?;
-    
-        let remote_addr = "127.0.0.1:59611";
-        sock.connect(remote_addr).await?;
-        let mut buf = [0; 1024];
-        loop {
-            let len = sock.recv(&mut buf).await?;
-            println!("{:?} bytes received from {:?}", len, remote_addr);
-    
-            let len = sock.send(&buf[..len]).await?;
-            println!("{:?} bytes sent", len);
-        }
-    }
-    ```
-
-### Concurrency and Splitting
-
-Unlike `TcpStream`, `UdpSocket` does not have a `split` method. However, since its send and receive methods take `&self`, a single socket can be shared across multiple tasks using `Arc<UdpSocket>`.
-
-*Example: Concurrent sending and receiving using an `Arc`.*
 ```rust
-use tokio::{net::UdpSocket, sync::mpsc};
-use std::{io, net::SocketAddr, sync::Arc};
+use tokio::io::{self, AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpListener;
 
 #[tokio::main]
-asyn fn main() -> io::Result<()> {
-    let sock = UdpSocket::bind("0.0.0.0:8080".parse::<SocketAddr>().unwrap()).await?;
-    let r = Arc::new(sock);
-    let s = r.clone();
-    let (tx, mut rx) = mpsc::channel::<(Vec<u8>, SocketAddr)>(1_000);
+async fn main() -> io::Result<()> {
+    let listener = TcpListener::bind("127.0.0.1:8080").await?;
 
-    tokio::spawn(async move {
-        while let Some((bytes, addr)) = rx.recv().await {
-            let len = s.send_to(&bytes, &addr).await.unwrap();
-            println!("{:?} bytes sent", len);
-        }
-    });
-
-    let mut buf = [0; 1024];
     loop {
-        let (len, addr) = r.recv_from(&mut buf).await?;
-        println!("{:?} bytes received from {:?}", len, addr);
-        tx.send((buf[..len].to_vec(), addr)).await.unwrap();
+        let (mut socket, _) = listener.accept().await?;
+
+        tokio::spawn(async move {
+            let mut buf = vec![0; 1024];
+
+            loop {
+                match socket.read(&mut buf).await {
+                    // Return value of `Ok(0)` signifies that the remote has
+                    // closed the connection.
+                    Ok(0) => return,
+                    Ok(n) => {
+                        // Copy the data back to the socket
+                        if socket.write_all(&buf[..n]).await.is_err() {
+                            // Unexpected error. Just exit the task.
+                            return;
+                        }
+                    }
+                    Err(_) => {
+                        // Unexpected error. Just exit the task.
+                        return;
+                    }
+                }
+            }
+        });
     }
 }
 ```
 
-## Unix Domain Sockets
+## UDP (User Datagram Protocol)
 
-For inter-process communication (IPC) on Unix-like systems, Tokio provides asynchronous Unix domain sockets. They behave like TCP sockets but operate on a local filesystem path instead of an IP address and port.
+UDP is a connectionless protocol that offers a simple but unreliable datagram service. It's suitable for applications where speed is critical and some data loss is acceptable, like gaming or voice chat.
 
--   **`UnixListener`** and **`UnixStream`**: For connection-oriented, stream-based communication, similar to TCP.
--   **`UnixDatagram`**: For connectionless, datagram-based communication, similar to UDP.
--   **`UnixSocket`**: A lower-level socket for advanced configuration.
+The `UdpSocket` type can be used in two primary ways:
 
-These types are only available on Unix platforms.
+1.  **One-to-many**: A single socket bound to an address can send and receive datagrams to and from many different remote peers using `send_to` and `recv_from`.
+2.  **One-to-one**: A socket can be `connect`ed to a single remote peer, allowing the use of `send` and `recv` for communication, which filters incoming packets to only that address.
 
-## Custom I/O Resources
+### Example: One-to-Many UDP Echo Server
 
-For I/O resources not natively available in `tokio::net`, such as raw sockets or other platform-specific handles, you can use [`AsyncFd`](./api-io.md) to integrate them with the Tokio runtime. This allows you to perform non-blocking I/O operations on any file descriptor that can be monitored by the operating system's event queue (like epoll, kqueue, or IOCP).
+This server binds to an address and echoes back any received datagram to its original sender.
+
+```rust,no_run
+use tokio::net::UdpSocket;
+use std::io;
+
+#[tokio::main]
+async fn main() -> io::Result<()> {
+    let sock = UdpSocket::bind("0.0.0.0:8080").await?;
+    let mut buf = [0; 1024];
+    loop {
+        let (len, addr) = sock.recv_from(&mut buf).await?;
+        println!("{:?} bytes received from {:?}", len, addr);
+
+        let len = sock.send_to(&buf[..len], addr).await?;
+        println!("{:?} bytes sent", len);
+    }
+}
+```
+
+### Sharing a `UdpSocket`
+
+Because its methods take `&self` instead of `&mut self`, a `UdpSocket` can be safely shared across multiple tasks for concurrent reads and writes by wrapping it in an `Arc<UdpSocket>`.
+
+## Unix Domain Sockets (UDS)
+
+Available only on Unix-like systems, Unix Domain Sockets facilitate inter-process communication (IPC) on the same machine. They behave similarly to TCP streams but use filesystem paths for addressing instead of IP addresses and ports.
+
+-   **`UnixListener`** and **`UnixStream`**: Provide a stream-oriented connection, similar to TCP.
+-   **`UnixDatagram`**: Provides a datagram-based socket, similar to UDP.
+-   **`UnixSocket`**: A lower-level utility for creating and configuring a Unix socket.
+
+## Platform-Specific Networking
+
+Tokio also includes modules for networking features specific to certain operating systems.
+
+-   **Windows**: The `tokio::net::windows` module provides support for Named Pipes.
+-   **Unix**: The `tokio::net::unix` module contains UDS types as well as support for FIFO pipes via `tokio::net::unix::pipe`.
+
+## Utilities
+
+### DNS Resolution
+
+The `lookup_host` function provides an asynchronous way to perform DNS resolution.
+
+### Address Handling
+
+The `ToSocketAddrs` trait is used by networking types to convert various address representations into one or more `SocketAddr` instances.
 
 ---
 
-Now that you have an overview of Tokio's networking capabilities, you can explore the [asynchronous I/O traits and helpers](./api-io.md) that power them, or dive into [synchronization primitives](./api-sync.md) for managing state in your network application.
+With these networking primitives, you can build a wide variety of applications. For more hands-on examples, check out the [Examples](./examples.md) section. To understand the underlying I/O operations, see the [I/O API Reference](./api-io.md).

@@ -1,36 +1,39 @@
 # 信号
 
-本模块提供对异步信号处理的支持。信号处理是一个复杂的主题，应谨慎对待。此实现旨在遵循最佳实践，但您应评估其是否适合您的特定需求。
+该模块为异步信号处理提供支持。信号是一种进程间通信的形式，正确处理它们可能很复杂。此实现旨在遵循最佳实践，但您应评估其是否适合您的特定应用需求。
 
-特定于操作系统的结构中记录了一些基本限制。
+请注意，信号处理是平台特定的。Tokio 为 Unix 和 Windows 提供了不同的 API，以适应它们各自不同的模型。
 
-## 跨平台：处理 Ctrl-C
-
-Tokio 提供了一个方便的跨平台函数来监听 `ctrl-c` 信号（在 Unix 上为 `SIGINT`）。这通常是在应用程序中处理优雅关闭的最简单方法。
+一个常见的用例是在按下 `CTRL+C` 时正常关闭服务器。
 
 ```rust,no_run
 use tokio::signal;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("等待 ctrl-c...");
+    println!("Waiting for CTRL+C...");
     signal::ctrl_c().await?;
-    println!("已收到 ctrl-c！");
+    println!("CTRL+C received, shutting down.");
     Ok(())
 }
 ```
 
-## 平台特定信号
+---
 
-对于更高级或平台特定的信号处理，Tokio 为 Unix 和 Windows 均提供了模块。
+## Unix 信号
 
-### Unix 信号
+在 Unix 平台上，您可以监听任意信号。用于此目的的主要类型是 `Signal`（表示监听器）和 `SignalKind`（指定信号）。
 
-`tokio::signal::unix` 模块提供了主要的 `Signal` 类型，用于接收各种 Unix 信号的通知。
+### `signal()`
 
-#### `signal()`
+为指定的信号类型创建一个新的监听器。该函数返回一个 `Signal` 实例，可用于接收通知。
 
-要为特定信号创建监听器，请使用 `signal` 函数并提供一个 `SignalKind`。
+**重要注意事项：**
+
+*   **信号合并**：如果在轮询监听器之前接收到多个信号，它们将被合并为一个通知。轮询后，下一个信号保证会生成一个新的通知。
+*   **持久化处理器**：当首次为特定信号创建监听器时，会为整个进程的生命周期安装一个操作系统级别的信号处理器。即使 `Signal` 实例被丢弃，此行为也不会重置。例如，监听 `SIGINT` 将阻止后续 `SIGINT` 信号的默认进程终止行为。
+
+**示例：等待 `SIGHUP`**
 
 ```rust,no_run
 # #[cfg(unix)] {
@@ -41,7 +44,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 创建一个 SIGHUP 信号流。
     let mut stream = signal(SignalKind::hangup())?;
 
-    // 每当收到 HUP 信号时打印。
+    // 每当接收到 HUP 信号时，打印信息。
     loop {
         stream.recv().await;
         println!("got signal HUP");
@@ -50,134 +53,65 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 # }
 ```
 
-#### Signal 结构体
+### `Signal` 结构体
 
-`signal` 函数返回一个 `Signal` 结构体，它充当特定信号类型的监听器，可用于异步等待信号。
+用于接收特定操作系统信号的监听器。它提供两种主要方法来接收通知。
 
-**方法：**
+*   `recv()`：一个 `async` 方法，在接收到下一个信号时完成。
+*   `poll_recv()`：一个用于手动实现 `Future` 的方法，用于轮询下一个信号。
 
-*   `recv(&mut self) -> Option<()>`: 异步等待下一个信号通知。
-*   `poll_recv(&mut self, cx: &mut Context<'_>) -> Poll<Option<()>>`: 在非异步上下文中轮询下一个信号通知。
+### `SignalKind` 结构体
 
-#### 重要注意事项
+表示要监听的特定信号类型。它为常见信号提供了构造方法。
 
-使用 Unix 信号处理程序时，请注意以下几点：
+<x-cards data-columns="3">
+  <x-card data-title="alarm()" data-icon="lucide:alarm-clock">SIGALRM：当实时定时器到期时发送。</x-card>
+  <x-card data-title="child()" data-icon="lucide:baby">SIGCHLD：当子进程的状态发生变化时发送。</x-card>
+  <x-card data-title="hangup()" data-icon="lucide:phone-off">SIGHUP：当终端断开连接时发送。</x-card>
+  <x-card data-title="interrupt()" data-icon="lucide:keyboard">SIGINT：用于中断程序（例如，Ctrl+C）。</x-card>
+  <x-card data-title="io()" data-icon="lucide:arrow-left-right">SIGIO：当文件描述符上可以进行 I/O 操作时发送。</x-card>
+  <x-card data-title="pipe()" data-icon="lucide:pipeline">SIGPIPE：当向没有读取者的管道写入时发送。</x-card>
+  <x-card data-title="quit()" data-icon="lucide:log-out">SIGQUIT：用于终止进程并转储核心。</x-card>
+  <x-card data-title="terminate()" data-icon="lucide:shield-x">SIGTERM：用于请求进程正常关闭。</x-card>
+  <x-card data-title="user_defined1()" data-icon="lucide:user-cog">SIGUSR1：用户定义的信号。</x-card>
+  <x-card data-title="user_defined2()" data-icon="lucide:user-cog">SIGUSR2：用户定义的信号。</x-card>
+  <x-card data-title="window_change()" data-icon="lucide:rectangle-horizontal">SIGWINCH：当终端窗口大小调整时发送。</x-card>
+  <x-card data-title="from_raw()" data-icon="lucide:hash">允许通过其原始整数值监听任何有效的操作系统信号。</x-card>
+</x-cards>
 
-1.  **处理程序生命周期**：首次为特定信号类型创建 `Signal` 时，会为*进程的整个生命周期*安装一个操作系统信号处理程序，并替换平台的默认行为。即使 `Signal` 实例被丢弃，该处理程序也**不会**被重置。例如，在监听一次 `SIGINT` 后，进程将不再默认因 `SIGINT` 而终止。
+---
 
-2.  **信号合并**：信号可能会被合并。如果在轮询监听器之前收到多个信号，它们可能会合并成一个事件。监听器保证每个事件对应*至少一个*信号。
+## Windows 信号
 
-#### `SignalKind`
+在 Windows 上，信号处理基于控制台控制事件。Tokio 提供了独立的函数来为每种特定事件类型创建监听器。
 
-此结构体表示要监听的特定信号类型。常用信号可作为常量使用。
+与 Unix 实现类似，通知会被合并。如果在轮询监听器之前发生多个相同类型的事件，它们将作为单个通知被传递。
 
-| Method | Signal | Description |
-|---|---|---|
-| `alarm()` | `SIGALRM` | 当实时计时器到期时发送。 |
-| `child()` | `SIGCHLD` | 当子进程的状态发生变化时发送。 |
-| `hangup()` | `SIGHUP` | 当控制终端断开连接时发送。 |
-| `interrupt()` | `SIGINT` | 用于中断程序（例如，ctrl-c）。 |
-| `io()` | `SIGIO` / `SIGPOLL` | 当可以在文件描述符上执行 I/O 操作时发送。 |
-| `pipe()` | `SIGPIPE` | 当向没有读取者的管道写入时发送。 |
-| `quit()` | `SIGQUIT` | 用于请求进程关闭并生成核心转储。 |
-| `terminate()` | `SIGTERM` | 用于请求进程优雅关闭。 |
-| `user_defined1()` | `SIGUSR1` | 用户自定义信号 1。 |
-| `user_defined2()` | `SIGUSR2` | 用户自定义信号 2。 |
-| `window_change()` | `SIGWINCH` | 当终端窗口大小调整时发送。 |
+<x-cards data-columns="2">
+  <x-card data-title="ctrl_c()" data-icon="lucide:keyboard">创建一个监听器，在用户按下 `Ctrl+C` 时接收通知。</x-card>
+  <x-card data-title="ctrl_break()" data-icon="lucide:keyboard">为 `Ctrl+Break` 事件创建一个监听器。</x-card>
+  <x-card data-title="ctrl_close()" data-icon="lucide:x-square">为 `Ctrl+Close` 事件创建一个监听器，当控制台窗口关闭时发送。</x-card>
+  <x-card data-title="ctrl_shutdown()" data-icon="lucide:power-off">为 `Ctrl+Shutdown` 事件创建一个监听器，当系统关闭时发送。</x-card>
+  <x-card data-title="ctrl_logoff()" data-icon="lucide:log-out">为 `Ctrl+Logoff` 事件创建一个监听器，当用户注销时发送。</x-card>
+</x-cards>
 
-对于平台特定或不太常见的信号，您可以从原始整数值创建 `SignalKind`：
+这些函数各自返回一个专用的结构体（例如 `CtrlC`、`CtrlBreak`），带有 `recv()` 和 `poll_recv()` 方法，其行为与它们的 Unix 对应部分完全相同。
 
-```rust,no_run
-# use tokio::signal::unix::SignalKind;
-# let signum = -1;
-// let signum = libc::OS_SPECIFIC_SIGNAL;
-let kind = SignalKind::from_raw(signum);
-```
-
-### Windows 事件
-
-`tokio::signal::windows` 模块允许通过 `SetConsoleCtrlHandler` 函数接收“ctrl-c”和“ctrl-break”等控制台控制事件。
-
-与 Unix 信号类似，如果处理不够迅速，这些通知也会被合并。
-
-#### `ctrl_c`
-
-为“ctrl-c”事件创建一个监听器。
-
-```rust,no_run
-use tokio::signal::windows::ctrl_c;
-
-#[tokio::main]
-async fn main() -> std::io::Result<()> {
-    let mut stream = ctrl_c()?;
-    stream.recv().await;
-    println!("收到 ctrl-c");
-    Ok(())
-}
-```
-
-#### `ctrl_break`
-
-为“ctrl-break”事件创建一个监听器。
+**示例：处理 `Ctrl+Break`**
 
 ```rust,no_run
 use tokio::signal::windows::ctrl_break;
+use std::io;
 
 #[tokio::main]
-async fn main() -> std::io::Result<()> {
+async fn main() -> io::Result<()> {
     let mut stream = ctrl_break()?;
-    stream.recv().await;
-    println!("收到 ctrl-break");
-    Ok(())
+
+    loop {
+        stream.recv().await;
+        println!("got CTRL-BREAK signal");
+    }
 }
 ```
 
-#### `ctrl_close`
-
-为控制台关闭事件创建一个监听器。
-
-```rust,no_run
-use tokio::signal::windows::ctrl_close;
-
-#[tokio::main]
-async fn main() -> std::io::Result<()> {
-    let mut stream = ctrl_close()?;
-    stream.recv().await;
-    println!("收到 ctrl-close");
-    Ok(())
-}
-```
-
-#### `ctrl_shutdown`
-
-为系统关闭事件创建一个监听器。
-
-```rust,no_run
-use tokio::signal::windows::ctrl_shutdown;
-
-#[tokio::main]
-async fn main() -> std::io::Result<()> {
-    let mut stream = ctrl_shutdown()?;
-    stream.recv().await;
-    println!("收到 ctrl-shutdown");
-    Ok(())
-}
-```
-
-#### `ctrl_logoff`
-
-为用户注销事件创建一个监听器。
-
-```rust,no_run
-use tokio::signal::windows::ctrl_logoff;
-
-#[tokio::main]
-async fn main() -> std::io::Result<()> {
-    let mut stream = ctrl_logoff()?;
-    stream.recv().await;
-    println!("收到 ctrl-logoff");
-    Ok(())
-}
-```
-
-这些函数各自返回一个结构体（例如 `CtrlC`、`CtrlBreak`），其中包含 `recv()` 和 `poll_recv()` 方法，其行为与 Unix 的 `Signal` 结构体类似。
+现在您已经了解了信号处理，您可能对异步管理子进程感兴趣。有关更多详细信息，请参阅 [进程](./api-process.md) 文档。

@@ -1,84 +1,147 @@
 # Tasks & Scheduling
 
-In Tokio, a **task** is a lightweight, non-blocking unit of execution. Think of tasks as asynchronous green threads: they are similar to OS threads, but instead of being managed by the operating system, they are managed by the Tokio runtime. This makes creating and switching between tasks extremely cheap compared to OS threads.
+Asynchronous programs in Tokio are built around lightweight, non-blocking units of execution called tasks. This guide covers the core concepts of how to create, manage, and coordinate these tasks for building concurrent applications.
+
+## What are Tasks?
+
+A task is similar to an OS thread, but it's managed by the Tokio runtime instead of the OS scheduler. This makes them significantly more lightweight. You can think of them as being similar to Go's goroutines or Erlang's processes.
 
 Key characteristics of Tokio tasks include:
 
-*   **Lightweight**: Creating, running, and destroying large numbers of tasks has very low overhead.
-*   **Cooperative**: Tasks run until they voluntarily yield control to the scheduler (usually at an `.await` point), allowing other tasks to run. This is in contrast to the preemptive multitasking used by OS threads.
-*   **Non-blocking**: Tasks should not perform operations that block the thread, such as synchronous I/O or heavy CPU computations. Doing so would prevent other tasks on the same thread from making progress. Tokio provides specific tools for handling such cases.
+*   **Lightweight**: Creating, switching, and destroying tasks has very low overhead compared to OS threads. It's common for a Tokio application to manage thousands or even millions of tasks.
+*   **Cooperatively Scheduled**: Tasks run until they yield control back to the scheduler, typically at an `.await` point. The scheduler then runs another task. This is in contrast to preemptive multitasking used by OS threads, where the OS can interrupt a thread at any time.
+*   **Non-blocking**: Tasks should not perform operations that block the thread, such as synchronous I/O or heavy, long-running computations. Doing so would prevent other tasks on the same thread from making progress. For such cases, Tokio provides specific APIs.
+
+Let's explore how to work with tasks in practice.
 
 ```d2
 direction: down
 
-"Tokio Runtime" {
-  shape: cloud
+"Tokio Runtime": {
+  shape: package
+  grid-columns: 2
+  grid-gap: 80
 
-  "Worker Threads (Core)" {
-    style.stroke-dash: 2
-    "Worker Thread 1" {
-      "Async Task A"
-      "Async Task B"
-    }
-    "Worker Thread 2" {
-      "Async Task C"
-    }
-  }
-
-  "Blocking Thread Pool" {
+  "Core Worker Threads": {
+    label: "Core Worker Threads (for async tasks)"
     shape: package
-    "Blocking Task X"
-    "Blocking Task Y"
+    grid-columns: 2
+
+    "Worker 1": {
+      shape: rectangle
+      "Task A (runs)" -> "yields at .await" -> "Task B (runs)" -> "yields at .await" -> "Task A (resumes)"
+    }
+
+    "Worker 2": {
+      shape: rectangle
+      "Task C (runs)" -> "yields at .await" -> "Task D (runs)"
+    }
   }
 
-  "Worker Thread 1" -> "Async Task A": polls
-  "Worker Thread 1" -> "Async Task B": polls
-  "Worker Thread 2" -> "Async Task C": polls
-}
-```
+  "Blocking Thread Pool": {
+    label: "Blocking Thread Pool (for sync code)"
+    shape: package
+    grid-columns: 2
 
-This section covers the essential patterns for working with tasks, from creating them to managing their execution and handling special cases like blocking operations.
+    "Blocking Thread 1": {
+      shape: rectangle
+      "Blocking Operation 1"
+    }
+    "Blocking Thread 2": {
+      shape: rectangle
+      "Blocking Operation 2"
+    }
+  }
+}
+
+"Application Code": {
+  shape: rectangle
+  grid-columns: 1
+  "spawn(async_fn)": {
+    label: "tokio::spawn(async { ... })"
+  }
+  "spawn_blocking(sync_fn)": {
+    label: "tokio::spawn_blocking(|| { ... })"
+  }
+}
+
+"Application Code"."spawn(async_fn)" -> "Tokio Runtime"."Core Worker Threads": "Schedules on a worker"
+"Application Code"."spawn_blocking(sync_fn)" -> "Tokio Runtime"."Blocking Thread Pool": "Runs on a dedicated thread"
+
+```
 
 ## Spawning Tasks
 
-The most fundamental operation is creating, or *spawning*, a new asynchronous task. This is done using the `tokio::spawn` function, which accepts a future and immediately begins executing it concurrently on the runtime.
-
-`tokio::spawn` returns a `JoinHandle`, which is itself a future. You can `.await` the `JoinHandle` to get the output of the spawned task. This is how you can wait for a task to complete and retrieve its result.
+The most common way to create a task is with the `tokio::spawn` function. It takes an asynchronous block or future and immediately schedules it to run on the runtime. It returns a `JoinHandle`, which you can use to interact with the spawned task.
 
 ```rust
 use tokio::task;
 
 async fn my_background_op(id: i32) -> String {
-    let s = format!("Processing background task {}.", id);
+    let s = format!("Background task {} complete.", id);
     println!("{}", s);
-    // Simulate some work
-    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
     s
 }
 
 #[tokio::main]
 async fn main() {
-    // Spawn a new task.
-    let join_handle = tokio::spawn(my_background_op(1));
+    let handle = tokio::spawn(my_background_op(1));
 
-    // Do other work in the main task.
-    println!("Doing other work in main task.");
+    // Do other work while the task runs...
+    println!("Main function continues...");
 
     // Await the result of the spawned task.
-    match join_handle.await {
-        Ok(result) => println!("Spawned task completed with result: '{}'", result),
-        Err(e) => println!("Spawned task failed: {:?}", e),
-    }
+    let result = handle.await.unwrap();
+    println!("Result from task: {}", result);
 }
 ```
 
-If a spawned task panics, awaiting its `JoinHandle` will return a `JoinError` indicating the failure.
+If a spawned task panics, awaiting its `JoinHandle` will return a `JoinError`.
+
+```rust
+use tokio::task;
+
+#[tokio::main]
+async fn main() {
+    let handle = task::spawn(async {
+        panic!("something went wrong!")
+    });
+
+    // The await returns an Err result because the task panicked.
+    assert!(handle.await.is_err());
+}
+```
+
+## Task Cancellation
+
+You can cancel a running task by calling the `abort()` method on its `JoinHandle`. This signals the task to shut down the next time it yields at an `.await` point. Awaiting a handle for an aborted task will result in a `JoinError` indicating it was cancelled.
+
+```rust
+use tokio::time::{sleep, Duration};
+
+#[tokio::main]
+async fn main() {
+    let handle = tokio::spawn(async {
+        // This task will run for a long time
+        sleep(Duration::from_secs(10)).await;
+    });
+
+    // Abort the task
+    handle.abort();
+
+    // Awaiting the handle will now return a cancelled error
+    let err = handle.await.unwrap_err();
+    assert!(err.is_cancelled());
+}
+```
+
+Note that `abort()` only schedules the cancellation. To wait for the task to fully shut down, you must still `.await` the `JoinHandle`.
 
 ## Managing Multiple Tasks with `JoinSet`
 
-When you need to manage a group of tasks, a `JoinSet` is a powerful tool. It allows you to spawn multiple tasks and await their results as they complete, without needing to know which one will finish first.
+When you need to spawn several related tasks and process their results as they complete, a `JoinSet` is an excellent tool. It allows you to add tasks and then await the next one that finishes, without needing to manage a collection of `JoinHandle`s manually.
 
-When the `JoinSet` is dropped, all tasks still remaining in the set are automatically aborted.
+When a `JoinSet` is dropped, all tasks still remaining in the set are automatically aborted.
 
 ```rust
 use tokio::task::JoinSet;
@@ -90,93 +153,65 @@ async fn main() {
 
     for i in 0..5 {
         set.spawn(async move {
-            sleep(Duration::from_millis((5 - i) * 100)).await;
-            i
+            sleep(Duration::from_millis(100 * i)).await;
+            i * 2
         });
     }
 
-    println!("Waiting for tasks to complete...");
     while let Some(res) = set.join_next().await {
-        match res {
-            Ok(val) => println!("Task {} completed.", val),
-            Err(e) => println!("A task failed: {:?}", e),
-        }
+        let output = res.unwrap();
+        println!("Task completed with result: {}", output);
     }
-    println!("All tasks finished.");
 }
 ```
 
-In this example, tasks are processed in the order they finish (4, 3, 2, 1, 0), not the order they were spawned.
-
-## Task Cancellation
-
-Tasks can be cancelled using the `abort` method on their `JoinHandle` or an `AbortHandle`. Cancellation is a signal that requests the task to shut down at its next `.await` point. Once a task is cancelled and finishes shutting down, awaiting its `JoinHandle` will result in a `JoinError` where `is_cancelled()` returns `true`.
-
-It's important to note that `abort()` schedules the cancellation and returns immediately; it does not wait for the task to stop running. To ensure a task is fully stopped, you should `abort()` it and then `.await` its `JoinHandle`.
-
-Tasks spawned with `spawn_blocking` cannot be aborted once they begin execution.
-
 ## Handling Blocking Operations
 
-Because Tokio's scheduler is cooperative, a task must not perform blocking operations on a worker thread, as this would stall all other tasks on that same thread. To handle code that must block (e.g., synchronous file I/O, CPU-intensive computations), Tokio provides two main solutions.
+Because tasks are scheduled cooperatively, running a blocking operation directly within an async task will block the entire worker thread, preventing any other tasks on that thread from running. Tokio provides two primary mechanisms to handle this.
 
-<x-cards data-columns="2">
-  <x-card data-title="spawn_blocking" data-icon="lucide:cpu">
-    Runs a blocking function on a separate thread pool dedicated to blocking tasks. This is the most common way to integrate blocking code into an async application.
-  </x-card>
-  <x-card data-title="block_in_place" data-icon="lucide:pause-circle">
-    Transitions the current worker thread into a blocking thread, allowing the runtime to migrate other tasks to a new worker. This can be more efficient by avoiding a context switch but is only available on the multi-threaded runtime.
-  </x-card>
-</x-cards>
+### `spawn_blocking`
 
-### Using `spawn_blocking`
-
-This function moves the blocking operation off the main async worker threads, preventing it from interfering with other asynchronous tasks.
+The `spawn_blocking` function takes a synchronous closure and runs it on a dedicated thread pool designed for blocking operations. This prevents the main async worker threads from being blocked.
 
 ```rust
 use tokio::task;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut data = "start-".to_string();
-
-    let result = task::spawn_blocking(move || {
+    let blocking_task = task::spawn_blocking(|| {
         // This is running on a blocking thread.
-        // Synchronous, CPU-heavy work is acceptable here.
+        // Synchronous file I/O or heavy computation is OK here.
         std::thread::sleep(std::time::Duration::from_secs(1));
-        data.push_str("end");
-        data
-    }).await?;
+        "done"
+    });
 
-    assert_eq!(result, "start-end");
+    // The JoinHandle from spawn_blocking can be awaited like any other.
+    let result = blocking_task.await?;
+    assert_eq!(result, "done");
     Ok(())
 }
 ```
 
-### Using `block_in_place`
+### `block_in_place`
 
-This function should be used when you are already inside an async task on a multi-threaded runtime and need to perform a short-lived blocking operation.
+When using the multi-threaded runtime, `block_in_place` provides an alternative. It signals to the runtime that the current thread is about to block. The runtime can then move other tasks from this thread to a different worker to keep them running, while the current thread is dedicated to the blocking operation.
 
 ```rust
 use tokio::task;
 
 #[tokio::main]
 async fn main() {
-    let result = task::block_in_place(|| {
-        // This code is now running on a thread that is allowed to block.
+     task::block_in_place(|| {
+        // This is running on the *same* thread, but the runtime has
+        // moved other tasks away.
         std::thread::sleep(std::time::Duration::from_secs(1));
-        "blocking completed"
     });
-
-    assert_eq!(result, "blocking completed");
 }
 ```
 
-## Yielding Control
+## Yielding
 
-Occasionally, you may want a task to voluntarily give up its execution time and allow other tasks to run. The `tokio::task::yield_now().await` function does exactly this. It yields control back to the Tokio scheduler, which will place the current task at the back of the queue and schedule another ready task.
-
-This can be useful for ensuring long-running computations don't starve other tasks, even if the computation itself is fully asynchronous.
+Cooperative scheduling means a task runs until it hits an `.await`. If you have a task that does a lot of computation without awaiting, it can hog the scheduler. You can voluntarily yield control back to the scheduler by calling `tokio::task::yield_now().await`. This gives other pending tasks a chance to run.
 
 ```rust
 use tokio::task;
@@ -184,22 +219,18 @@ use tokio::task;
 #[tokio::main]
 async fn main() {
     task::spawn(async {
-        println!("[spawned] Task starting");
-        // ... work ...
-        println!("[spawned] Task finished");
+        println!("Spawned task running");
     });
 
-    println!("[main] Before yield");
-    // Yield, allowing the newly-spawned task to potentially execute.
+    println!("Main task running");
+    // Yield, allowing the newly-spawned task to potentially run before we continue.
     task::yield_now().await;
-    println!("[main] After yield");
+    println!("Main task resumed");
 }
 ```
 
-You have now learned the fundamentals of creating and managing tasks in Tokio. With these concepts, you can build concurrent applications that are both efficient and scalable.
+---
 
-Next, learn how to perform non-blocking I/O operations, a common activity for most tasks.
+Understanding how to effectively manage tasks is fundamental to building robust Tokio applications. Now that you know how to run and coordinate concurrent operations, you can explore how these tasks perform work.
 
-<x-card data-title="Next: Asynchronous I/O" data-icon="lucide:arrow-right" data-href="/concepts/io" data-cta="Read More" >
-  Explore Tokio's non-blocking primitives for networking, filesystem operations, and more.
-</x-card>
+Next, let's look at how Tokio handles [Asynchronous I/O](./concepts-io.md).

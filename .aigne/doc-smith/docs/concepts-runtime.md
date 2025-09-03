@@ -1,210 +1,161 @@
 # The Runtime
 
-The Tokio runtime is the engine that powers asynchronous Rust applications. While async code in Rust provides the syntax for non-blocking operations, it requires a runtime to actually execute the futures, manage tasks, and handle I/O events. The Tokio runtime provides all the necessary services for building robust, high-performance network applications.
+The Tokio runtime is the engine that powers asynchronous applications in Rust. Unlike synchronous programs, async code requires a dedicated environment to manage tasks, handle I/O events, and coordinate time-based operations. The Tokio `Runtime` provides all these necessary services bundled together.
 
-At a high level, the runtime bundles together several key components:
+At a high level, the runtime is responsible for:
 
-- An **I/O event loop**, often called the driver, which interfaces with the operating system's event queue (like `epoll`, `kqueue`, or `IOCP`).
-- A **task scheduler** that manages the execution of numerous, lightweight asynchronous tasks.
-- A **timer** for scheduling work to run at a future time, enabling functionality like timeouts and intervals.
-- A dedicated **thread pool** for offloading blocking, CPU-bound operations to prevent them from stalling the event loop.
+-   **An I/O event loop (driver):** This is the core component that interfaces with the operating system's event queue (like `epoll` on Linux, `kqueue` on macOS, or `IOCP` on Windows) to drive I/O resources and notify tasks when they are ready to make progress.
+-   **A task scheduler:** This component manages a pool of lightweight, non-blocking tasks, deciding which task to run on which thread at any given time.
+-   **A timer:** This provides the ability to schedule work to run after a specific duration, enabling features like sleeps, intervals, and timeouts.
 
-For most applications, the `#[tokio::main]` macro is the simplest way to start the runtime. However, Tokio also provides a powerful `Builder` for fine-grained configuration. This section explores the runtime's architecture, configurations, and execution model.
+While you can manually configure and manage a `Runtime` instance, most applications start with the `#[tokio::main]` macro, which conveniently sets up a default runtime.
 
-### Runtime Architecture
+## Runtime Architecture
 
-The components of the Tokio runtime work together to execute your asynchronous code efficiently.
+A Tokio runtime coordinates several components to execute asynchronous code efficiently. Understanding this architecture helps in configuring the runtime for specific needs and diagnosing performance issues.
 
 ```d2
 direction: down
 
-"Application Code" {
-  "async fn main() {}"
-  "tokio::spawn(...)"
-}
+"Application Code": { shape: rectangle }
+os: "Operating System\n(epoll, kqueue, IOCP)": { shape: cloud }
 
-"Tokio Runtime" {
-  style.fill: "#f0f8ff"
-  "Scheduler (Multi-thread or Current-thread)"
-  "Driver" : {
-    "I/O Poller (epoll, kqueue, etc.)"
-    "Timer"
+"Tokio Runtime": {
+  shape: package
+  grid-columns: 1
+  grid-gap: 50
+
+  ts: "Task Scheduler" {
+    wt: "Worker Threads"
   }
-  "Blocking Thread Pool"
+  drivers: "Resource Drivers" {
+    grid-columns: 2
+    io: "I/O Driver"
+    timer: "Timer"
+  }
+  bp: "Blocking Pool"
 }
 
-"Application Code" -> "Tokio Runtime"."Scheduler": "Spawns tasks"
-"Tokio Runtime"."Scheduler" -> "Tokio Runtime"."Driver": "Polls for events"
-"Tokio Runtime"."Scheduler" -> "Tokio Runtime"."Blocking Thread Pool": "Delegates blocking work"
-"Tokio Runtime"."Driver" -> "Tokio Runtime"."Scheduler": "Wakes tasks on I/O/Time events"
+# Connections
+"Application Code" -> "Tokio Runtime".ts: "tokio::spawn()"
+"Application Code" -> "Tokio Runtime".bp: "tokio::task::spawn_blocking()"
 
+"Tokio Runtime".ts -> "Tokio Runtime".ts.wt: "dispatches tasks"
+"Tokio Runtime".ts -> "Tokio Runtime".drivers: "polls for events"
+"Tokio Runtime".drivers.io <-> os: "I/O Events"
 ```
 
-## Usage
+## Scheduler Types
 
-There are two primary ways to interact with the Tokio runtime: using the `#[tokio::main]` macro for simplicity, or building and managing a `Runtime` instance manually for greater control.
+Tokio offers different scheduling strategies, allowing you to choose the best fit for your application's workload.
 
-### Simple Usage with `#[tokio::main]`
+### Multi-Thread Scheduler
 
-The easiest way to get started is by annotating your `main` function. This macro creates a default multi-threaded runtime, starts it, and runs the `async` main function within it.
+This is the default and most commonly used scheduler. It utilizes a pool of worker threads, typically one for each CPU core, and employs a work-stealing strategy to keep all threads busy. When a thread runs out of tasks in its local queue, it will "steal" tasks from other, busier threads. This approach is ideal for most server-side applications and workloads that can benefit from parallelism.
+
+It is enabled by default with `Runtime::new()` or `Builder::new_multi_thread()`.
 
 ```rust
-use tokio::net::TcpListener;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::runtime;
 
+// Creates a multi-threaded runtime with default settings.
+let rt = runtime::Runtime::new().unwrap();
+
+rt.block_on(async {
+    println!("Running on the multi-thread scheduler!");
+});
+```
+
+### Current-Thread Scheduler
+
+The current-thread scheduler executes all tasks on the thread that creates the runtime. It's a single-threaded executor. This scheduler is useful for scenarios where you need to run async code but don't require multi-threading, such as in resource-constrained environments or when embedding an async runtime into a larger, existing application.
+
+To use it, you must construct it with the `Builder`.
+
+```rust
+use tokio::runtime;
+
+// Creates a single-threaded runtime.
+let rt = runtime::Builder::new_current_thread()
+    .enable_all()
+    .build()
+    .unwrap();
+
+// Runs the runtime on the current thread.
+rt.block_on(async {
+    println!("Running on the current-thread scheduler!");
+});
+```
+
+## Creating and Configuring a Runtime
+
+You can create a runtime with default settings or customize it extensively using the `Builder`.
+
+### The Simple Way: `#[tokio::main]`
+
+For most applications, the `#[tokio::main]` attribute macro is the simplest way to start a runtime. It transforms an `async fn main()` into a synchronous `fn main()` that initializes a `Runtime` and executes the future.
+
+```rust,no_run
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let listener = TcpListener::bind("127.0.0.1:8080").await?;
-
-    loop {
-        let (mut socket, _) = listener.accept().await?;
-
-        tokio::spawn(async move {
-            let mut buf = [0; 1024];
-            loop {
-                let n = match socket.read(&mut buf).await {
-                    Ok(0) => return,
-                    Ok(n) => n,
-                    Err(e) => {
-                        eprintln!("failed to read from socket; err = {:?}", e);
-                        return;
-                    }
-                };
-
-                if let Err(e) = socket.write_all(&buf[0..n]).await {
-                    eprintln!("failed to write to socket; err = {:?}", e);
-                    return;
-                }
-            }
-        });
-    }
+async fn main() {
+    println!("Hello from Tokio!");
 }
 ```
 
-### Manual Usage with `Runtime::new()`
+### The Manual Way: `Runtime::new()` and `Builder`
 
-For more control, you can create a `Runtime` instance yourself. The `block_on` method starts the runtime and blocks the current thread until the provided future completes.
+For more control, you can build a runtime manually. This is necessary when you need to configure thread counts, enable specific drivers, or set up lifecycle hooks.
+
+The `Builder` provides a fluent API for configuration. Remember that when using the `Builder`, resource drivers for I/O and time are disabled by default and must be explicitly enabled with methods like `enable_io()`, `enable_time()`, or the convenient `enable_all()`.
+
+**Common Configuration Options**
+
+| Method                   | Description                                                                              |
+| ------------------------ | ---------------------------------------------------------------------------------------- |
+| `worker_threads(usize)`  | Sets the number of worker threads for the multi-thread scheduler.                        |
+| `max_blocking_threads(usize)` | Sets the maximum number of threads in the pool for blocking operations.                  |
+| `thread_name(String)`    | Sets a custom name for spawned worker threads, useful for debugging.                     |
+| `enable_all()`           | Enables both the I/O and time drivers.                                                   |
+| `enable_io()`            | Enables the I/O driver for networking, filesystem, etc.                                  |
+| `enable_time()`          | Enables the time driver for sleeps, intervals, and timeouts.                             |
+| `thread_stack_size(usize)` | Sets the stack size for worker threads.                                                  |
+| `thread_keep_alive(Duration)` | Sets a custom timeout for idle threads in the blocking pool.                             |
+
+**Example: Building a Custom Runtime**
 
 ```rust
-use tokio::net::TcpListener;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::runtime::Runtime;
+use tokio::runtime::Builder;
+use std::time::Duration;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Create the runtime
-    let rt = Runtime::new()?;
+fn main() {
+    // Build a custom runtime
+    let runtime = Builder::new_multi_thread()
+        .worker_threads(4) // Use 4 worker threads
+        .thread_name("my-tokio-worker")
+        .thread_keep_alive(Duration::from_millis(100))
+        .enable_all() // Enable I/O and time drivers
+        .build()
+        .unwrap();
 
-    // Spawn the root task
-    rt.block_on(async {
-        let listener = TcpListener::bind("127.0.0.1:8080").await.unwrap();
-        // ... same logic as above ...
+    // Use the runtime to block on the main future
+    runtime.block_on(async {
+        println!("Running on a custom-configured runtime!");
     });
-
-    Ok(())
 }
 ```
 
-## Scheduler Configurations
+## Runtime Shutdown
 
-Tokio provides two scheduler types, each suited for different use cases.
+The runtime shuts down when the `Runtime` instance is dropped. During shutdown, the runtime attempts to gracefully stop all spawned work. The thread that drops the `Runtime` will block until the shutdown process is complete.
 
-<x-cards data-columns="2">
-  <x-card data-title="Multi-Thread Scheduler" data-icon="lucide:cpu">
-    This is the default scheduler. It uses a work-stealing strategy across a pool of worker threads, typically one for each CPU core. It is ideal for most applications, especially those with high concurrency and I/O-bound workloads.
-  </x-card>
-  <x-card data-title="Current-Thread Scheduler" data-icon="lucide:user-round">
-    This scheduler runs all tasks on the single thread that created it. It is lighter than the multi-threaded scheduler and is useful for scenarios where only one thread is needed, or for embedding Tokio into an existing single-threaded application.
-  </x-card>
-</x-cards>
+-   **For async tasks:** Tasks run until their next yield point (`.await`), at which point they are dropped.
+-   **For blocking tasks:** Tasks spawned with `spawn_blocking` run to completion.
 
-You can select the scheduler using the `Builder`.
+Because waiting for all work to complete can take an indefinite amount of time, Tokio provides alternative shutdown methods:
 
-```rust
-use tokio::runtime::Builder;
+-   `shutdown_timeout(duration)`: Waits for a specified duration for work to stop. If the timeout is reached, remaining work and threads are leaked, and the function returns.
+-   `shutdown_background()`: Initiates shutdown without waiting. This is equivalent to `shutdown_timeout(Duration::from_nanos(0))` and is useful for dropping a runtime from within an async context.
 
-// Create a multi-threaded runtime
-let multi_thread_rt = Builder::new_multi_thread()
-    .enable_all()
-    .build()
-    .unwrap();
+## Further Reading
 
-// Create a single-threaded runtime
-let current_thread_rt = Builder::new_current_thread()
-    .enable_all()
-    .build()
-    .unwrap();
-```
-
-## Configuring the Runtime with `Builder`
-
-The `tokio::runtime::Builder` provides a flexible way to configure every aspect of the runtime before it's created. You can chain methods to customize thread counts, drivers, and scheduler behavior.
-
-| Method | Description |
-|---|---|
-| `new_multi_thread()` | Creates a builder for the multi-threaded, work-stealing scheduler. |
-| `new_current_thread()` | Creates a builder for the single-threaded scheduler. |
-| `enable_all()` | Enables both the I/O and time drivers. |
-| `enable_io()` | Enables the I/O driver for networking, file system, etc. |
-| `enable_time()` | Enables the timer driver for sleeps, intervals, and timeouts. |
-| `worker_threads(usize)` | Sets the number of worker threads for the multi-thread scheduler. |
-| `max_blocking_threads(usize)` | Sets the maximum number of threads for the blocking task pool. |
-| `thread_name(String)` | Sets the name for spawned worker threads. |
-| `thread_keep_alive(Duration)`| Sets the idle timeout for threads in the blocking pool. |
-
-Here is an example of a custom configuration:
-
-```rust
-use tokio::runtime::Builder;
-use std::time::Duration;
-
-let runtime = Builder::new_multi_thread()
-    .worker_threads(4)
-    .thread_name("my-tokio-worker")
-    .thread_stack_size(3 * 1024 * 1024)
-    .thread_keep_alive(Duration::from_secs(60))
-    .enable_all()
-    .build()
-    .unwrap();
-
-runtime.block_on(async {
-    println!("Hello from a custom-configured runtime!");
-});
-```
-
-## Execution Behavior
-
-Tokio's schedulers are designed for fairness and efficiency. While the exact scheduling algorithm is an implementation detail, the high-level behavior is important to understand.
-
-- **Fairness**: Tokio guarantees that if the total number of tasks does not grow indefinitely and no task blocks a worker thread, every woken task will eventually be scheduled to run.
-- **Spurious Wakeups**: A task may occasionally be polled even if its waker has not been called. Your code should not rely on wakeups being perfectly precise.
-
-### Scheduler Details
-- **Multi-Threaded**: Each worker thread has its own local queue of tasks. When a worker's local queue is empty, it will first check a global queue for new tasks and then attempt to "steal" tasks from other workers' local queues. This work-stealing approach helps ensure that all threads stay busy and work is distributed evenly.
-- **Current-Thread**: This scheduler uses a simpler model with a local and global queue. It prefers tasks from its local queue to minimize synchronization overhead but periodically polls the global queue to ensure fairness.
-
-## Shutting Down the Runtime
-
-The runtime shuts down when the `Runtime` value is dropped. During shutdown, the runtime attempts to gracefully stop all spawned work.
-
-- **Async tasks** (`tokio::spawn`): These tasks run until their next yield point (`.await`) and are then dropped. They are not guaranteed to run to completion.
-- **Blocking tasks** (`spawn_blocking`): These tasks run until they complete.
-
-The `drop` implementation will block the current thread until all work has stopped, which can be indefinite. For situations where you cannot block forever, you can use `shutdown_timeout(duration)` or `shutdown_background()`.
-
-```rust
-use tokio::runtime::Runtime;
-use std::time::Duration;
-
-let runtime = Runtime::new().unwrap();
-
-runtime.spawn(async {
-    // Some long-running task
-});
-
-// Shutdown the runtime, waiting at most 100ms for tasks to stop.
-runtime.shutdown_timeout(Duration::from_millis(100));
-```
-
----
-
-Now that you understand the core concepts of the runtime, you can explore how to manage individual units of work in the [Tasks & Scheduling](./concepts-tasks.md) section or dive into the detailed configuration options in the [API Reference](./api-runtime.md).
+This page provides a conceptual overview of the Tokio runtime. For detailed configuration options and methods, refer to the [Runtime API Reference](./api-runtime.md).

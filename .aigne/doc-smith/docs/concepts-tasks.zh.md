@@ -1,84 +1,147 @@
-# 任务和调度
+# 任务与调度
 
-在 Tokio 中，**任务**是一个轻量级的、非阻塞的执行单元。可以把任务看作是异步的绿色线程：它们与操作系统线程类似，但不是由操作系统管理，而是由 Tokio 运行时管理。与操作系统线程相比，这使得创建和切换任务的成本极低。
+Tokio 中的异步程序是围绕称为任务的轻量级、非阻塞执行单元构建的。本指南涵盖了如何创建、管理和协调这些任务以构建并发应用程序的核心概念。
+
+## 什么是任务？
+
+任务类似于操作系统线程，但它由 Tokio 运行时而不是操作系统调度器管理。这使得它们明显更轻量。你可以将它们视为类似于 Go 的 goroutine 或 Erlang 的进程。
 
 Tokio 任务的主要特点包括：
 
-*   **轻量级**：创建、运行和销毁大量任务的开销非常低。
-*   **协作式**：任务会一直运行，直到它们自愿将控制权交还给调度器（通常在 `.await` 点），从而允许其他任务运行。这与操作系统线程使用的抢占式多任务处理形成对比。
-*   **非阻塞**：任务不应执行阻塞线程的操作，例如同步 I/O 或繁重的 CPU 计算。这样做会阻止同一线程上的其他任务取得进展。Tokio 提供了处理此类情况的特定工具。
+*   **轻量级**：与操作系统线程相比，创建、切换和销毁任务的开销非常低。一个 Tokio 应用程序管理成千上万甚至数百万个任务是很常见的。
+*   **协作式调度**：任务会一直运行，直到它们在 `.await` 点将控制权交还给调度器。然后调度器会运行另一个任务。这与操作系统线程使用的抢占式多任务处理形成对比，在抢占式多任务处理中，操作系统可以随时中断线程。
+*   **非阻塞**：任务不应执行阻塞线程的操作，例如同步 I/O 或繁重的、长时间运行的计算。这样做会阻止同一线程上的其他任务取得进展。对于这种情况，Tokio 提供了特定的 API。
+
+让我们来探讨如何在实践中使用任务。
 
 ```d2
 direction: down
 
-"Tokio Runtime" {
-  shape: cloud
+"Tokio 运行时": {
+  shape: package
+  grid-columns: 2
+  grid-gap: 80
 
-  "Worker Threads (Core)" {
-    style.stroke-dash: 2
-    "Worker Thread 1" {
-      "Async Task A"
-      "Async Task B"
-    }
-    "Worker Thread 2" {
-      "Async Task C"
-    }
-  }
-
-  "Blocking Thread Pool" {
+  "核心工作线程": {
+    label: "核心工作线程（用于异步任务）"
     shape: package
-    "Blocking Task X"
-    "Blocking Task Y"
+    grid-columns: 2
+
+    "工作线程 1": {
+      shape: rectangle
+      "任务 A (运行)" -> "在 .await 处让出" -> "任务 B (运行)" -> "在 .await 处让出" -> "任务 A (恢复)"
+    }
+
+    "工作线程 2": {
+      shape: rectangle
+      "任务 C (运行)" -> "在 .await 处让出" -> "任务 D (运行)"
+    }
   }
 
-  "Worker Thread 1" -> "Async Task A": polls
-  "Worker Thread 1" -> "Async Task B": polls
-  "Worker Thread 2" -> "Async Task C": polls
-}
-```
+  "阻塞线程池": {
+    label: "阻塞线程池（用于同步代码）"
+    shape: package
+    grid-columns: 2
 
-本节涵盖了使用任务的基本模式，从创建任务到管理其执行，再到处理阻塞操作等特殊情况。
+    "阻塞线程 1": {
+      shape: rectangle
+      "阻塞操作 1"
+    }
+    "阻塞线程 2": {
+      shape: rectangle
+      "阻塞操作 2"
+    }
+  }
+}
+
+"应用程序代码": {
+  shape: rectangle
+  grid-columns: 1
+  "spawn(async_fn)": {
+    label: "tokio::spawn(async { ... })"
+  }
+  "spawn_blocking(sync_fn)": {
+    label: "tokio::spawn_blocking(|| { ... })"
+  }
+}
+
+"应用程序代码"."spawn(async_fn)" -> "Tokio 运行时"."核心工作线程": "在工作线程上调度"
+"应用程序代码"."spawn_blocking(sync_fn)" -> "Tokio 运行时"."阻塞线程池": "在专用线程上运行"
+
+```
 
 ## 生成任务
 
-最基本的操作是创建或*生成*一个新的异步任务。这通过使用 `tokio::spawn` 函数来完成，该函数接受一个 future 并立即在运行时上并发执行它。
-
-`tokio::spawn` 返回一个 `JoinHandle`，它本身也是一个 future。你可以 `.await` 这个 `JoinHandle` 来获取生成任务的输出。通过这种方式，你可以等待任务完成并检索其结果。
+创建任务最常见的方法是使用 `tokio::spawn` 函数。它接受一个异步块或 future，并立即调度它在运行时上运行。它返回一个 `JoinHandle`，你可以用它与生成的任务进行交互。
 
 ```rust
 use tokio::task;
 
 async fn my_background_op(id: i32) -> String {
-    let s = format!("Processing background task {}.", id);
+    let s = format!("Background task {} complete.", id);
     println!("{}", s);
-    // 模拟一些工作
-    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
     s
 }
 
 #[tokio::main]
 async fn main() {
-    // 生成一个新任务。
-    let join_handle = tokio::spawn(my_background_op(1));
+    let handle = tokio::spawn(my_background_op(1));
 
-    // 在主任务中执行其他工作。
-    println!("Doing other work in main task.");
+    // 在任务运行时执行其他工作……
+    println!("Main function continues...");
 
     // 等待生成任务的结果。
-    match join_handle.await {
-        Ok(result) => println!("Spawned task completed with result: '{}'", result),
-        Err(e) => println!("Spawned task failed: {:?}", e),
-    }
+    let result = handle.await.unwrap();
+    println!("Result from task: {}", result);
 }
 ```
 
-如果一个生成的任务发生 panic，对其 `JoinHandle` 进行 `.await` 将返回一个 `JoinError`，表示失败。
+如果一个生成的任务发生 panic，等待其 `JoinHandle` 将返回一个 `JoinError`。
 
-## 使用 JoinSet 管理多个任务
+```rust
+use tokio::task;
 
-当你需要管理一组任务时，`JoinSet` 是一个强大的工具。它允许你生成多个任务，并在它们完成时等待其结果，而无需知道哪一个会先完成。
+#[tokio::main]
+async fn main() {
+    let handle = task::spawn(async {
+        panic!("something went wrong!")
+    });
 
-当 `JoinSet` 被 drop 时，集合中所有剩余的任务都会被自动中止。
+    // 因为任务发生 panic，await 返回一个 Err 结果。
+    assert!(handle.await.is_err());
+}
+```
+
+## 任务取消
+
+你可以通过调用其 `JoinHandle` 上的 `abort()` 方法来取消一个正在运行的任务。这会向任务发出信号，在下一次于 `.await` 点让出时关闭。等待一个被中止任务的句柄将导致一个 `JoinError`，表明它已被取消。
+
+```rust
+use tokio::time::{sleep, Duration};
+
+#[tokio::main]
+async fn main() {
+    let handle = tokio::spawn(async {
+        // 这个任务将长时间运行
+        sleep(Duration::from_secs(10)).await;
+    });
+
+    // 中止任务
+    handle.abort();
+
+    // 现在等待句柄将返回一个已取消的错误
+    let err = handle.await.unwrap_err();
+    assert!(err.is_cancelled());
+}
+```
+
+请注意，`abort()` 仅调度取消操作。要等待任务完全关闭，你仍然必须 `.await` `JoinHandle`。
+
+## 使用 `JoinSet` 管理多个任务
+
+当你需要生成几个相关的任务并在它们完成时处理它们的结果时，`JoinSet` 是一个极好的工具。它允许你添加任务，然后等待下一个完成的任务，而无需手动管理一个 `JoinHandle` 的集合。
+
+当一个 `JoinSet` 被丢弃时，集合中所有仍然存在的任务都会被自动中止。
 
 ```rust
 use tokio::task::JoinSet;
@@ -90,93 +153,65 @@ async fn main() {
 
     for i in 0..5 {
         set.spawn(async move {
-            sleep(Duration::from_millis((5 - i) * 100)).await;
-            i
+            sleep(Duration::from_millis(100 * i)).await;
+            i * 2
         });
     }
 
-    println!("Waiting for tasks to complete...");
     while let Some(res) = set.join_next().await {
-        match res {
-            Ok(val) => println!("Task {} completed.", val),
-            Err(e) => println!("A task failed: {:?}", e),
-        }
+        let output = res.unwrap();
+        println!("Task completed with result: {}", output);
     }
-    println!("All tasks finished.");
 }
 ```
 
-在此示例中，任务是按照它们完成的顺序（4、3、2、1、0）处理的，而不是它们被生成的顺序。
-
-## 任务取消
-
-任务可以通过其 `JoinHandle` 或 `AbortHandle` 上的 `abort` 方法来取消。取消是一个信号，请求任务在下一个 `.await` 点关闭。一旦任务被取消并完成关闭，对其 `JoinHandle` 进行 `.await` 将导致一个 `JoinError`，其中 `is_cancelled()` 返回 `true`。
-
-需要注意的是，`abort()` 会安排取消操作并立即返回；它不会等待任务停止运行。为了确保任务完全停止，你应该先 `abort()` 它，然后 `.await` 它的 `JoinHandle`。
-
-使用 `spawn_blocking` 生成的任务一旦开始执行就无法中止。
-
 ## 处理阻塞操作
 
-因为 Tokio 的调度器是协作式的，所以任务不能在工作线程上执行阻塞操作，因为这会阻塞同一线程上的所有其他任务。为了处理必须阻塞的代码（例如，同步文件 I/O、CPU 密集型计算），Tokio 提供了两种主要的解决方案。
+因为任务是协作式调度的，直接在异步任务中运行阻塞操作将阻塞整个工作线程，从而阻止该线程上的任何其他任务运行。Tokio 提供了两种主要机制来处理这个问题。
 
-<x-cards data-columns="2">
-  <x-card data-title="spawn_blocking" data-icon="lucide:cpu">
-    在专门用于阻塞任务的独立线程池上运行阻塞函数。这是将阻塞代码集成到异步应用程序中的最常用方法。
-  </x-card>
-  <x-card data-title="block_in_place" data-icon="lucide:pause-circle">
-    将当前工作线程转换为阻塞线程，允许运行时将其他任务迁移到新的工作线程。这通过避免上下文切换可以更高效，但仅在多线程运行时中可用。
-  </x-card>
-</x-cards>
+### `spawn_blocking`
 
-### 使用 `spawn_blocking`
-
-此函数将阻塞操作从主异步工作线程中移出，防止其干扰其他异步任务。
+`spawn_blocking` 函数接受一个同步闭包，并在专为阻塞操作设计的专用线程池上运行它。这可以防止主异步工作线程被阻塞。
 
 ```rust
 use tokio::task;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut data = "start-".to_string();
-
-    let result = task::spawn_blocking(move || {
-        // 这正在一个阻塞线程上运行。
-        // 在这里可以执行同步的、CPU 密集型的工作。
+    let blocking_task = task::spawn_blocking(|| {
+        // 这在阻塞线程上运行。
+        // 在这里可以进行同步文件 I/O 或繁重的计算。
         std::thread::sleep(std::time::Duration::from_secs(1));
-        data.push_str("end");
-        data
-    }).await?;
+        "done"
+    });
 
-    assert_eq!(result, "start-end");
+    // 来自 spawn_blocking 的 JoinHandle 可以像其他任何句柄一样被等待。
+    let result = blocking_task.await?;
+    assert_eq!(result, "done");
     Ok(())
 }
 ```
 
-### 使用 `block_in_place`
+### `block_in_place`
 
-当你已经在一个多线程运行时的异步任务中，并且需要执行一个短暂的阻塞操作时，应该使用此函数。
+当使用多线程运行时，`block_in_place` 提供了另一种选择。它向运行时发出信号，表明当前线程即将阻塞。然后，运行时可以将此线程上的其他任务移动到不同的工作线程以保持它们运行，而当前线程则专用于阻塞操作。
 
 ```rust
 use tokio::task;
 
 #[tokio::main]
 async fn main() {
-    let result = task::block_in_place(|| {
-        // 这段代码现在运行在一个允许阻塞的线程上。
+     task::block_in_place(|| {
+        // 这在*同一个*线程上运行，但运行时已经
+        // 将其他任务移走了。
         std::thread::sleep(std::time::Duration::from_secs(1));
-        "blocking completed"
     });
-
-    assert_eq!(result, "blocking completed");
 }
 ```
 
-## 交出控制权
+## 让出
 
-有时，你可能希望一个任务自愿放弃其执行时间，让其他任务运行。`tokio::task::yield_now().await` 函数正是为此而设计的。它将控制权交还给 Tokio 调度器，调度器会将当前任务放到队列的末尾，并调度另一个就绪的任务。
-
-这对于确保长时间运行的计算不会饿死其他任务非常有用，即使计算本身是完全异步的。
+协作式调度意味着任务会一直运行，直到遇到 `.await`。如果你的任务在没有等待的情况下进行了大量计算，它可能会独占调度器。你可以通过调用 `tokio::task::yield_now().await` 主动将控制权交还给调度器。这给了其他待处理的任务一个运行的机会。
 
 ```rust
 use tokio::task;
@@ -184,22 +219,18 @@ use tokio::task;
 #[tokio::main]
 async fn main() {
     task::spawn(async {
-        println!("[spawned] Task starting");
-        // ... work ...
-        println!("[spawned] Task finished");
+        println!("Spawned task running");
     });
 
-    println!("[main] Before yield");
-    // 交出控制权，允许新生成的任务有机会执行。
+    println!("Main task running");
+    // 让出，允许新生成的任务在我们继续之前有机会运行。
     task::yield_now().await;
-    println!("[main] After yield");
+    println!("Main task resumed");
 }
 ```
 
-现在你已经学习了在 Tokio 中创建和管理任务的基础知识。利用这些概念，你可以构建既高效又可扩展的并发应用程序。
+---
 
-接下来，学习如何执行非阻塞 I/O 操作，这是大多数任务的常见活动。
+理解如何有效管理任务是构建健壮的 Tokio 应用程序的基础。既然你已经知道如何运行和协调并发操作，你可以探索这些任务是如何执行工作的。
 
-<x-card data-title="下一步：异步 I/O" data-icon="lucide:arrow-right" data-href="/concepts/io" data-cta="阅读更多" >
-  探索 Tokio 用于网络、文件系统操作等的非阻塞原语。
-</x-card>
+接下来，让我们看看 Tokio 如何处理 [异步 I/O](./concepts-io.md)。

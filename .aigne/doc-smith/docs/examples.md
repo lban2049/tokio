@@ -1,23 +1,33 @@
 # Examples
 
-This section provides a collection of working code examples to help you understand how to use various Tokio features. These examples are designed to be practical and easy to follow, demonstrating common use cases.
+This section provides a collection of working code examples that demonstrate various Tokio features and use cases. These examples are designed to be practical and can serve as a starting point for your own applications.
 
-For a more comprehensive set of examples, you can explore the [official Tokio examples directory on GitHub](https://github.com/tokio-rs/tokio/tree/master/examples).
+<x-cards data-columns="1">
+  <x-card data-title="TCP Echo Server" data-icon="lucide:server">
+    A fundamental example of an asynchronous TCP server that echoes back any data it receives from a client. This is a great starting point for understanding basic network I/O.
+  </x-card>
+  <x-card data-title="Mini-Redis" data-icon="lucide:database">
+    A larger, 'real-world' example of a simplified Redis server. It demonstrates structuring a complete application, managing shared state, and handling client commands.
+  </x-card>
+</x-cards>
 
 ## TCP Echo Server
 
-A simple yet complete TCP echo server that listens for incoming connections and echoes back any data it receives. This is a great starting point for building network applications.
+A simple TCP echo server is a classic way to demonstrate asynchronous I/O. The server listens on a socket, accepts incoming connections, and for each connection, it reads data and writes it back to the same socket.
 
-First, ensure your `Cargo.toml` is configured to include the necessary Tokio features. The `full` feature is recommended for getting started easily.
+### Dependencies
+
+To run this example, you need to enable the necessary features in your `Cargo.toml` file. The `full` feature flag is the easiest way to get started.
 
 ```toml
-[dependencies]
 tokio = { version = "1", features = ["full"] }
 ```
 
-Here is the server implementation:
+### Server Code
 
-```rust
+The following code implements the complete echo server:
+
+```rust,no_run
 use tokio::net::TcpListener;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -56,53 +66,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ### How It Works
 
-1.  **`TcpListener::bind(...)`**: Binds a new TCP listener to the specified address. The `.await` pauses execution until the listener is successfully bound.
-2.  **`listener.accept().await`**: In an infinite loop, the server waits for new incoming connections. Execution is paused until a connection is established.
-3.  **`tokio::spawn(...)`**: For each new connection, a new asynchronous task is spawned. This allows the server to handle multiple clients concurrently without blocking the main loop.
-4.  **`socket.read(...)` and `socket.write_all(...)`**: Inside the spawned task, the server repeatedly reads data from the socket into a buffer and writes the exact same data back to the socket, effectively "echoing" it.
+1.  **`TcpListener::bind`**: The server starts by binding a `TcpListener` to a local address (`127.0.0.1:8080`). The `.await` keyword pauses execution until the listener is successfully bound.
+2.  **`listener.accept()`**: The server enters a loop, calling `listener.accept().await` to wait for incoming connections. When a client connects, `accept` returns a new `TcpSocket` and the client's address.
+3.  **`tokio::spawn`**: To handle multiple clients concurrently, a new task is spawned for each accepted connection. The `socket` is moved into this new task.
+4.  **Read/Write Loop**: Inside the spawned task, a loop continuously reads data from the socket into a buffer. If the read is successful (`Ok(n)` where `n > 0`), the same data (`&buf[0..n]`) is written back to the socket. If the client closes the connection, `read` returns `Ok(0)`, and the task terminates.
 
-## Handling Blocking Operations
+## Advanced Example: Mini-Redis
 
-Tokio's cooperative scheduler requires tasks to yield control so other tasks can run. However, some operations are inherently blocking, such as heavy CPU computations or traditional, synchronous file I/O. To handle these without stalling the runtime, you should use `tokio::task::spawn_blocking`.
+For a more substantial, real-world example, see the [mini-redis repository](https://github.com/tokio-rs/mini-redis/). This project is an asynchronous, simplified implementation of a Redis server and client built with Tokio.
 
-This function moves the blocking operation to a dedicated thread pool, allowing the main runtime to continue processing other asynchronous tasks.
+It's an excellent resource for learning how to structure a larger Tokio application and demonstrates concepts such as:
 
-```rust
-#[tokio::main]
-async fn main() {
-    // This is running on a core thread.
+- Managing shared, mutable state across tasks.
+- Framing, which is the process of parsing a stream of bytes into a sequence of messages.
+- Graceful shutdown.
+- Implementing both the client and server sides of a protocol.
 
-    let blocking_task = tokio::task::spawn_blocking(|| {
-        // This is running on a blocking thread.
-        // Blocking here is ok.
-        // For example, a heavy computation.
-        std::thread::sleep(std::time::Duration::from_secs(1));
-        "done"
-    });
+## More Examples
 
-    // We can wait for the blocking task like this:
-    // If the blocking task panics, the unwrap below will propagate the
-    // panic.
-    let result = blocking_task.await.unwrap();
-    println!("Blocking task finished: {}", result);
-}
-```
-
-### How It Works
-
-1.  The closure passed to `spawn_blocking` is executed on a separate thread from Tokio's blocking thread pool.
-2.  This prevents the potentially long-running operation from halting the progress of other asynchronous tasks on the main scheduler.
-3.  The main task can `.await` the `JoinHandle` returned by `spawn_blocking` to receive the result once the computation is complete, without blocking the executor.
-
-## More Advanced Examples
-
-For larger, real-world examples that demonstrate how to structure a full application with Tokio, check out these resources.
-
-<x-cards data-columns="2">
-  <x-card data-title="Mini-Redis" data-icon="lucide:database" data-href="https://github.com/tokio-rs/mini-redis/">
-    A complete, asynchronous Redis client and server. It's an excellent example of a real-world application built with Tokio, showcasing channels, shared state, and graceful shutdown.
-  </x-card>
-  <x-card data-title="Official Examples" data-icon="lucide:book-open" data-href="https://github.com/tokio-rs/tokio/tree/master/examples">
-    The official Tokio repository contains a wide variety of smaller examples, each focusing on a specific feature like networking, channels, or timers.
-  </x-card>
-</x-cards>
+More examples covering a wide range of Tokio's features can be found in the [examples directory of the Tokio GitHub repository](https://github.com/tokio-rs/tokio/tree/master/examples). These provide concise demonstrations of specific APIs and are a valuable resource for learning.

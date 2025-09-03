@@ -1,101 +1,18 @@
 # I/O
 
-用于异步 I/O 功能的 Trait、辅助函数和类型定义。该模块是 `std::io` 的异步版本。
+该模块为异步 I/O 功能提供 trait、辅助函数和类型定义。它可作为 `std::io` 的异步对应部分。
 
-该模块为在 Tokio 中处理异步输入和输出提供了基础构建块。其主要组件是 `AsyncRead` 和 `AsyncWrite` 这两个 Trait，它们是标准库中 `Read` 和 `Write` Trait 的非阻塞版本。
+Tokio I/O 的基石是一对 trait：`AsyncRead` 和 `AsyncWrite`，它们是标准库中 `Read` 和 `Write` trait 的异步版本。
 
-```d2
-direction: down
+## `AsyncRead` 和 `AsyncWrite`
 
-"核心 I/O Trait" : {
-  shape: package
-  "AsyncRead": "从源异步读取字节。"
-  "AsyncWrite": "向目标异步写入字节。"
-  "AsyncBufRead": "用于带缓冲的异步读取的 Trait。"
-  "AsyncSeek": "用于在流中进行异步寻址的 Trait。"
-}
+与标准库的 `Read` 和 `Write` trait 类似，`AsyncRead` 和 `AsyncWrite` 提供了用于读取和写入字节流的通用接口。主要区别在于它们的异步性质。当 I/O 操作无法立即完成时，它不会阻塞线程，而是交由 Tokio 调度器处理。这使得在 I/O 操作挂起时，其他任务可以继续运行。
 
-"I/O 工具与结构体" : {
-   shape: package
-   "BufReader": "为任何 AsyncRead 添加缓冲。"
-   "BufWriter": "为任何 AsyncWrite 添加缓冲。"
-   "split()": "将一个流拆分为独立的可读和可写两部分。"
-   "join()": "将一个读取器和一个写入器合并成单个流。"
-   "stdin(), stdout(), stderr()": "标准 I/O 流。"
-}
+这些 trait 的实用方法通过扩展 trait `AsyncReadExt` 和 `AsyncWriteExt` 提供，它们会自动为任何实现 `AsyncRead` 和 `AsyncWrite` 的类型实现。
 
-"核心 I/O Trait" -> "I/O 工具与结构体": "由其使用和实现"
-```
+例如，从 `tokio::fs::File` 读取数据与从 `std::fs::File` 读取非常相似：
 
-## 核心 Trait
-
-Tokio 的 I/O 功能是围绕一组核心 Trait 构建的，这些 Trait 定义了异步字节流的行为。
-
-### `AsyncRead`
-
-`AsyncRead` Trait 用于可以异步读取字节的源。它是 `std::io::Read` 的异步等价物。
-
-与其同步版本不同，当 I/O 未就绪时，`AsyncRead` 上的方法会把控制权交给 Tokio 调度器，而不是阻塞线程。这允许其他任务在等待 I/O 操作完成时运行。
-
-该 Trait 的核心方法是 `poll_read`：
-
-```rust
-fn poll_read(
-    self: Pin<&mut Self>,
-    cx: &mut Context<'_>,
-    buf: &mut ReadBuf<'_>,
-) -> Poll<io::Result<()>>;
-```
-
-- **`Poll::Ready(Ok(()))`**：表示数据已成功读入缓冲区。读取的字节数可以通过检查 `buf.filled().len()` 的变化来确定。如果长度没有变化，则意味着已到达文件末尾 (EOF)。
-- **`Poll::Pending`**：表示当前没有可用数据。当前任务被调度为在 I/O 资源再次变为可读时被唤醒。
-- **`Poll::Ready(Err(e))`**：发生 I/O 错误。
-
-最终用户通常会使用 [`AsyncReadExt`](#asyncreadext) 提供的方法（如 `.read()`），而不是直接调用 `poll_read`。
-
-### `AsyncWrite`
-
-`AsyncWrite` Trait 用于可以异步写入字节的目标。它是 `std::io::Write` 的异步等价物。
-
-它提供了三个核心方法，如果操作无法立即完成，每个方法都会返回一个 `Poll`，用于调度当前任务以便后续唤醒。
-
-| 方法 | 描述 |
-|---|---|
-| `poll_write` | 尝试将缓冲区中的字节写入对象。返回写入的字节数。 |
-| `poll_flush` | 尝试刷新所有缓冲数据，确保其到达目的地。 |
-| `poll_shutdown` | 启动写入器的平滑关闭。这可能涉及刷新数据和执行关闭握手。 |
-
-### `AsyncBufRead`
-
-该 Trait 类似于 `std::io::BufRead`，由具有内部缓冲区的异步读取器实现。它提供了更高效的缓冲读取方法，例如读取直到遇到分隔符。
-
-其核心方法是：
-
-| 方法 | 描述 |
-|---|---|
-| `poll_fill_buf` | 尝试从底层读取器获取更多数据以填充内部缓冲区。返回可用数据的切片。 |
-| `consume` | 通知缓冲区，已有特定数量的字节被消耗，不应再次返回。 |
-
-### `AsyncSeek`
-
-该 Trait 提供了类似于 `std::io::Seek` 的异步寻址功能。它允许更改流中的位置。
-
-| 方法 | 描述 |
-|---|---|
-| `start_seek` | 提交一个到指定位置的寻址操作。该操作不阻塞。 |
-| `poll_complete` | 等待一个待处理的寻址操作完成，返回从流开始处的新位置。 |
-
-## 扩展 Trait
-
-`AsyncRead` 和 `AsyncWrite` 的实用方法通过扩展 Trait 提供，这些 Trait 对任何实现核心 Trait 的类型都自动可用。
-
-### `AsyncReadExt`
-
-提供方便的、基于 Future 的方法，如 `read`、`read_exact` 和 `read_to_end`。这些是您从 I/O 资源读取时将使用的主要方法。
-
-使用 `AsyncReadExt::read` 的示例：
-
-```no_run
+```rust,no_run
 use tokio::io::{self, AsyncReadExt};
 use tokio::fs::File;
 
@@ -104,7 +21,7 @@ async fn main() -> io::Result<()> {
     let mut f = File::open("foo.txt").await?;
     let mut buffer = [0; 10];
 
-    // 读取最多 10 个字节
+    // read up to 10 bytes
     let n = f.read(&mut buffer).await?;
 
     println!("The bytes: {:?}", &buffer[..n]);
@@ -112,19 +29,13 @@ async fn main() -> io::Result<()> {
 }
 ```
 
-### `AsyncWriteExt`
+### 缓冲 I/O
 
-提供方便的、基于 Future 的方法，如 `write`、`write_all` 和 `flush`。
+为了提高效率并减少系统调用，Tokio 提供了缓冲 I/O 类型，类似于 `std::io` 中的类型。这些包括 `AsyncBufRead` trait 以及 `BufReader` 和 `BufWriter` 结构体。这些包装器使用内部缓冲区来批量处理 I/O 操作。
 
-## 带缓冲的读取器和写入器
+`BufReader` 为任何异步读取器增强了 `read_line` 等方法：
 
-为了减少系统调用次数并提高性能，Tokio 提供了与标准库类似的带缓冲的 I/O 类型。
-
-- **`BufReader`**：包装任何 `AsyncRead` 以提供缓冲。它实现了 `AsyncBufRead`，并提供了如 `read_line` 等方法。
-- **`BufWriter`**：包装任何 `AsyncWrite` 以缓冲写入操作。只有当缓冲区已满或调用 `flush` 时，数据才会写入底层的写入器。
-
-`BufReader` 示例：
-```no_run
+```rust,no_run
 use tokio::io::{self, BufReader, AsyncBufReadExt};
 use tokio::fs::File;
 
@@ -134,7 +45,7 @@ async fn main() -> io::Result<()> {
     let mut reader = BufReader::new(f);
     let mut buffer = String::new();
 
-    // 将一行读入 buffer
+    // read a line into buffer
     reader.read_line(&mut buffer).await?;
 
     println!("{}", buffer);
@@ -142,51 +53,144 @@ async fn main() -> io::Result<()> {
 }
 ```
 
-**重要提示**：使用 `BufWriter` 时，必须调用 `.flush()` 以确保在写入器被丢弃前，缓冲区中剩余的任何数据都已写入底层流。
+`BufWriter` 会缓冲写入操作。必须调用 `flush` 以确保所有缓冲数据都已写入底层的写入器。
 
-```no_run
+```rust,no_run
 use tokio::io::{self, BufWriter, AsyncWriteExt};
 use tokio::fs::File;
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
     let f = File::create("foo.txt").await?;
-    let mut writer = BufWriter::new(f);
+    {
+        let mut writer = BufWriter::new(f);
 
-    writer.write_all(b"some bytes").await?;
+        // Write a byte to the buffer.
+        writer.write(&[42u8]).await?;
 
-    // 刷新缓冲区以确保数据写入文件。
-    writer.flush().await?;
+        // Flush the buffer before it goes out of scope.
+        writer.flush().await?;
+
+    } // Unless flushed, the contents of the buffer is discarded on drop.
 
     Ok(())
 }
 ```
 
-## 工具
+## 核心 I/O Trait
 
-### `split()`
+Tokio 的 I/O 功能是围绕一组定义了读取、写入和定位的异步行为的核心 trait 构建的。
 
-`split()` 函数接收一个实现了 `AsyncRead + AsyncWrite` 的值（如 `TcpStream`），并将其拆分为两个独立的句柄：一个 `ReadHalf` 和一个 `WriteHalf`。这对于将流的可读和可写部分移动到不同的任务中非常有用。
+<x-cards data-columns="2">
+  <x-card data-title="AsyncRead" data-icon="lucide:arrow-down-circle">
+    从源异步读取字节。类似于 `std::io::Read`。
+  </x-card>
+  <x-card data-title="AsyncWrite" data-icon="lucide:arrow-up-circle">
+    将字节异步写入目标。类似于 `std::io::Write`。
+  </x-card>
+  <x-card data-title="AsyncBufRead" data-icon="lucide:layers">
+    用于缓冲异步读取的 trait，提供 `read_line` 等方法。
+  </x-card>
+  <x-card data-title="AsyncSeek" data-icon="lucide:move-horizontal">
+    用于在异步 I/O 流中定位到不同位置的 trait。
+  </x-card>
+</x-cards>
 
-- `ReadHalf<T>` 实现了 `AsyncRead`。
-- `WriteHalf<T>` 实现了 `AsyncWrite`。
+### trait AsyncRead
 
-通过在 `ReadHalf` 上调用 `unsplit()` 并传入其对应的 `WriteHalf`，可以重构原始流。
+该 trait 允许从源异步读取字节。其核心方法 `poll_read` 尝试将字节读入缓冲区。如果数据不能立即可用，它会返回 `Poll::Pending`，并安排在源再次可读时通知当前任务。
 
-### `join()`
+**核心方法**
 
-`join()` 函数是 `split()` 的逆操作。它接收两个独立的值，一个实现 `AsyncRead`，另一个实现 `AsyncWrite`，并将它们组合成一个同时实现这两个 Trait 的单一值。
+| Method | Description |
+|---|---|
+| `poll_read(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut ReadBuf<'_>) -> Poll<io::Result<()>>` | 尝试将数据读入 `buf`。成功时返回 `Poll::Ready(Ok(()))`，无可用数据时返回 `Poll::Pending`，出错时返回 `Poll::Ready(Err(e))`。 |
+
+### trait AsyncWrite
+
+该 trait 允许将字节异步写入目标。如果目标未准备好接收更多数据，其方法将返回 `Poll::Pending`，并调度当前任务在写入器变为可写时收到通知。
+
+**核心方法**
+
+| Method | Description |
+|---|---|
+| `poll_write(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<Result<usize, io::Error>>` | 尝试将缓冲区写入此写入器，返回写入的字节数。 |
+| `poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>>` | 尝试刷新对象，确保所有缓冲数据到达其目的地。 |
+| `poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>>` | 启动或尝试关闭此写入器。 |
+
+### trait AsyncBufRead
+
+`AsyncRead` 的扩展，增加了缓冲读取的方法。这对于更复杂的解析（如逐行读取）很有用。
+
+**核心方法**
+
+| Method | Description |
+|---|---|
+| `poll_fill_buf(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<&[u8]>>` | 尝试用更多数据填充内部缓冲区，返回可用字节的切片。 |
+| `consume(self: Pin<&mut Self>, amt: usize)` | 通知缓冲区已从缓冲区中消费了 `amt` 个字节，这些字节不应再次返回。 |
+
+### trait AsyncSeek
+
+该 trait 提供异步定位功能，类似于 `std::io::Seek`。
+
+**核心方法**
+
+| Method | Description |
+|---|---|
+| `start_seek(self: Pin<&mut Self>, position: SeekFrom) -> io::Result<()>` | 提交一个定位到指定偏移量的操作。 |
+| `poll_complete(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<u64>>` | 等待挂起的定位操作完成，返回新位置。 |
+
+## 实用工具
+
+### 拆分和合并 I/O
+
+Tokio 提供了将单个 I/O 资源拆分为独立的读取和写入句柄，或将独立的读取和写入句柄合并为单个资源的实用工具。
+
+<x-cards>
+  <x-card data-title="fn split()" data-icon="lucide:git-pull-request-arrow">
+    将一个同时实现 `AsyncRead` 和 `AsyncWrite` 的值拆分为一个 `ReadHalf` 和一个 `WriteHalf`。这对于将这两个部分传递给不同的任务很有用。
+  </x-card>
+  <x-card data-title="fn join()" data-icon="lucide:git-merge">
+    将一个独立的 `AsyncRead` 值和一个 `AsyncWrite` 值合并成一个同时实现这两个 trait 的 `Join` 句柄。
+  </x-card>
+</x-cards>
 
 ### 标准 I/O
 
-Tokio 为标准输入、输出和错误流提供了异步句柄：
+Tokio 为标准输入、输出和错误流提供了异步 API。
 
-- **`stdin()`**：返回当前进程标准输入的句柄。
-- **`stdout()`**：返回标准输出的句柄。
-- **`stderr()`**：返回标准错误的句柄。
+- `stdin()`：返回标准输入流的句柄。
+- `stdout()`：返回标准输出流的句柄。
+- `stderr()`：返回标准错误流的句柄。
 
-这些函数必须在 Tokio 运行时的上下文中调用。
+> **注意：** 这些函数必须在 Tokio 运行时的上下文中调用。
 
-### 重新导出
+### 与 Stream 和 Sink 的互操作性
 
-为方便起见，该模块从 `std::io` 重新导出了常用类型，包括 `Error`、`ErrorKind`、`Result` 和 `SeekFrom`。
+对于更高级的用例，将 `AsyncRead` 或 `AsyncWrite` 适配为 `Stream` 或 `Sink` 会很方便。[`tokio-util`](https://docs.rs/tokio-util) crate 为此提供了适配器：
+
+- **`ReaderStream`**：将 `AsyncRead` 转换为字节块的 `Stream`。
+- **`StreamReader`**：将字节块的 `Stream` 转换为 `AsyncRead`。
+- **`Decoder` 和 `Encoder`**：用于构建帧协议的 trait，将字节流转换为结构化消息流，反之亦然。
+
+### 从 `std::io` 重新导出
+
+为方便起见，本模块从 `std::io` 中重新导出了以下常用类型：
+
+- `Error`
+- `ErrorKind`
+- `Result`
+- `SeekFrom`
+
+---
+
+在对 Tokio 的 I/O 原语有了扎实的理解之后，你现在可以探索用于特定任务的相关模块：
+
+<x-cards>
+  <x-card data-title="网络" data-icon="lucide:network" data-href="/api/net">
+    探索用于网络通信的异步 TCP、UDP 和 Unix 套接字。
+  </x-card>
+  <x-card data-title="文件系统" data-icon="lucide:folder-git-2" data-href="/api/fs">
+    了解异步文件和文件系统操作。
+  </x-card>
+</x-cards>

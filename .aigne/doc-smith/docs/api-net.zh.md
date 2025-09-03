@@ -1,182 +1,167 @@
 # 网络
 
-该模块为 Tokio 提供了异步的 TCP、UDP 和 Unix 套接字绑定，从而支持开发高性能网络应用程序。这些组件在设计上与其在标准库中的对应部分类似，但以非阻塞方式运行，与 Tokio 运行时无缝集成。
+该模块为 Tokio 提供了异步的 TCP、UDP 和 Unix 套接字绑定。这些组件在设计上与 Rust 标准库中的对应部分相似，但它们是非阻塞的，并与 Tokio 运行时集成。
 
-## 概述
+## 网络原语概述
 
-Tokio 的网络原语涵盖了最常见的协议和进程间通信 (IPC) 机制。以下是关键组件及其关系的直观分解：
+Tokio 的 `net` 模块按协议组织，为不同的通信需求提供了一系列类型。
 
 ```d2
 direction: down
 
-"网络应用程序": {
-  "TCP 服务器": {
-    "TcpListener" -> "TcpStream" : 接受
-  }
-  
-  "TCP 客户端": {
-    "TcpStream"
+"tokio::net": {
+  shape: package
+  grid-columns: 3
+  grid-gap: 50
+
+  "TCP (面向连接)": {
+    shape: rectangle
+    "TcpListener": "接受传入连接"
+    "TcpStream": "表示一个 TCP 流"
+    "TcpSocket": "底层套接字配置"
   }
 
-  "UDP 对等端": {
-    "UdpSocket"
-  }
-  
-  "Unix 域服务器": {
-    "UnixListener" -> "UnixStream" : 接受
+  "UDP (无连接)": {
+    shape: rectangle
+    "UdpSocket": "发送/接收数据报"
   }
 
-  "Unix 域客户端": {
-    "UnixStream"
+  "IPC (类 Unix 系统)": {
+    shape: rectangle
+    "UnixListener": "基于流的监听器"
+    "UnixStream": "流连接"
+    "UnixDatagram": "数据报套接字"
+    "Pipes": "FIFO 管道"
   }
 }
-
-"远程对等端": {
-  "远程 TCP 对等端 1"
-  "远程 TCP 对等端 2"
-  "远程 UDP 对等端 A"
-  "远程 UDP 对等端 B"
-}
-
-"本地进程": {
-  "进程 A"
-  "进程 B"
-}
-
-"网络应用程序"."TCP 客户端"."TcpStream" <-> "远程对等端"."远程 TCP 对等端 1": TCP 连接
-"网络应用程序"."TCP 服务器"."TcpStream" <-> "远程对等端"."远程 TCP 对等端 2": TCP 连接
-"网络应用程序"."UDP 对等端"."UdpSocket" <-> "远程对等端"."远程 UDP 对等端 A": UDP 数据报
-"网络应用程序"."UDP 对等端"."UdpSocket" <-> "远程对等端"."远程 UDP 对等端 B": UDP 数据报
-"网络应用程序"."Unix 域客户端"."UnixStream" <-> "本地进程"."进程 A": IPC
-"网络应用程序"."Unix 域服务器"."UnixStream" <-> "本地进程"."进程 B": IPC
 ```
 
-## 核心组件
-
-`tokio::net` 模块按协议进行组织。以下是您将使用的主要类型：
+以下是可用于构建网络协议的主要组件的快速指南。
 
 <x-cards data-columns="2">
-  <x-card data-title="TCP 套接字" data-icon="lucide:arrow-right-left">
-    提供 `TcpListener` 用于接受传入的流连接，以及 `TcpStream` 用于通过 TCP 进行通信。非常适合像 HTTP 这样可靠的、面向连接的协议。
+  <x-card data-title="TCP" data-icon="lucide:server">
+    用于可靠的、面向流的通信。包括用于接受连接的 `TcpListener` 和用于数据传输的 `TcpStream`。
   </x-card>
-  <x-card data-title="UDP 套接字" data-icon="lucide:move-diagonal">
-    提供 `UdpSocket` 用于通过 UDP 进行无连接的、基于数据报的通信。适用于速度优先于可靠性的应用，如游戏或流媒体。
+  <x-card data-title="UDP" data-icon="lucide:send">
+    用于无连接的、基于数据报的通信。`UdpSocket` 可用于向多个远程端发送数据和接收来自它们的数据。
   </x-card>
-  <x-card data-title="Unix 域套接字" data-icon="lucide:server">
-    用于在基于 Unix 的系统上进行进程间通信 (IPC) 的流和数据报套接字。包括 `UnixListener`、`UnixStream` 和 `UnixDatagram`。
+  <x-card data-title="Unix 域套接字" data-icon="lucide:box">
+    用于类 Unix 系统上的进程间通信 (IPC)。提供流 (`UnixListener`, `UnixStream`) 和数据报 (`UnixDatagram`) 两种变体。
   </x-card>
-  <x-card data-title="管道" data-icon="lucide:pipeline">
-    用于 IPC 的平台特定管道。这包括用于 Unix 上 FIFO 管道的 `tokio::net::unix::pipe` 和 Windows 上的 `tokio::net::windows::named_pipe`。
+  <x-card data-title="管道" data-icon="lucide:workflow">
+    用于特定平台的基于管道的通信，例如 Unix 上的 FIFO 管道和 Windows 上的命名管道。
   </x-card>
 </x-cards>
 
 ## TCP (传输控制协议)
 
-TCP 提供可靠、有序且经过错误校验的字节流传输。Tokio 为 TCP 网络提供了两种主要类型：
+TCP 在应用程序之间提供可靠、有序且经过错误校验的字节流。它是许多互联网协议（如 HTTP 和 FTP）的基础。
 
--   **`TcpListener`**：`std::net::TcpListener` 的异步版本。用于监听和接受传入的 TCP 连接。
--   **`TcpStream`**：本地和远程套接字之间的异步 TCP 流。它实现了 `AsyncRead` 和 `AsyncWrite` 用于发送和接收数据。
--   **`TcpSocket`**：一个较低级别的套接字，允许在用于连接或监听之前进行配置（例如，设置 `SO_REUSEADDR`）。
+-   **`TcpListener`**：一个用于接受传入 TCP 连接的异步监听器。
+-   **`TcpStream`**：表示本地和远程套接字之间的 TCP 连接。它可以被拆分为拥有的读取和写入两半。
+-   **`TcpSocket`**：一个用于在 TCP 套接字开始监听或连接之前创建和配置它的底层工具。
 
-## UDP (用户数据报协议)
+### 示例：TCP 回显服务器
 
-UDP 是一种无连接协议，提供基于数据报的通信服务。它优先考虑速度和低延迟，而不是可靠性。
+这是一个简单的 TCP 回显服务器示例，它接受连接并回显接收到的任何数据。
 
-### 使用模式
-
-`UdpSocket` 主要有两种使用方式：
-
-1.  **一对多 (未连接)**：将套接字绑定到一个地址，并使用 `send_to` 和 `recv_from` 与多个远程对等端通信。这是服务器处理多个客户端的典型用例。
-
-    *示例：一个处理多个客户端的回显服务器。*
-    ```rust
-    use tokio::net::UdpSocket;
-    use std::io;
-    
-    #[tokio::main]
-    async fn main() -> io::Result<()> {
-        let sock = UdpSocket::bind("0.0.0.0:8080").await?;
-        let mut buf = [0; 1024];
-        loop {
-            let (len, addr) = sock.recv_from(&mut buf).await?;
-            println!("{:?} bytes received from {:?}", len, addr);
-    
-            let len = sock.send_to(&buf[..len], addr).await?;
-            println!("{:?} bytes sent", len);
-        }
-    }
-    ```
-
-2.  **一对一 (已连接)**：使用 `connect` 将套接字与单个远程地址关联。连接后，您可以使用更方便的 `send` 和 `recv` 方法，该套接字将只与该特定对等端进行发送和接收。
-
-    *示例：一个连接到单个服务器的回显客户端。*
-    ```rust
-    use tokio::net::UdpSocket;
-    use std::io;
-    
-    #[tokio::main]
-    async fn main() -> io::Result<()> {
-        let sock = UdpSocket::bind("0.0.0.0:8080").await?;
-    
-        let remote_addr = "127.0.0.1:59611";
-        sock.connect(remote_addr).await?;
-        let mut buf = [0; 1024];
-        loop {
-            let len = sock.recv(&mut buf).await?;
-            println!("{:?} bytes received from {:?}", len, remote_addr);
-    
-            let len = sock.send(&buf[..len]).await?;
-            println!("{:?} bytes sent", len);
-        }
-    }
-    ```
-
-### 并发与拆分
-
-与 `TcpStream` 不同，`UdpSocket` 没有 `split` 方法。然而，由于其发送和接收方法接受 `&self`，单个套接字可以使用 `Arc<UdpSocket>` 在多个任务之间共享。
-
-*示例：使用 `Arc` 进行并发发送和接收。*
 ```rust
-use tokio::{net::UdpSocket, sync::mpsc};
-use std::{io, net::SocketAddr, sync::Arc};
+use tokio::io::{self, AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpListener;
 
 #[tokio::main]
-asyn fn main() -> io::Result<()> {
-    let sock = UdpSocket::bind("0.0.0.0:8080".parse::<SocketAddr>().unwrap()).await?;
-    let r = Arc::new(sock);
-    let s = r.clone();
-    let (tx, mut rx) = mpsc::channel::<(Vec<u8>, SocketAddr)>(1_000);
+async fn main() -> io::Result<()> {
+    let listener = TcpListener::bind("127.0.0.1:8080").await?;
 
-    tokio::spawn(async move {
-        while let Some((bytes, addr)) = rx.recv().await {
-            let len = s.send_to(&bytes, &addr).await.unwrap();
-            println!("{:?} bytes sent", len);
-        }
-    });
-
-    let mut buf = [0; 1024];
     loop {
-        let (len, addr) = r.recv_from(&mut buf).await?;
-        println!("{:?} bytes received from {:?}", len, addr);
-        tx.send((buf[..len].to_vec(), addr)).await.unwrap();
+        let (mut socket, _) = listener.accept().await?;
+
+        tokio::spawn(async move {
+            let mut buf = vec![0; 1024];
+
+            loop {
+                match socket.read(&mut buf).await {
+                    // `Ok(0)` 的返回值表示远程端已经
+                    // 关闭了连接。
+                    Ok(0) => return,
+                    Ok(n) => {
+                        // 将数据复制回套接字
+                        if socket.write_all(&buf[..n]).await.is_err() {
+                            // 意外错误。直接退出任务。
+                            return;
+                        }
+                    }
+                    Err(_) => {
+                        // 意外错误。直接退出任务。
+                        return;
+                    }
+                }
+            }
+        });
     }
 }
 ```
 
-## Unix 域套接字
+## UDP (用户数据报协议)
 
-对于类 Unix 系统上的进程间通信 (IPC)，Tokio 提供了异步 Unix 域套接字。它们的行为类似于 TCP 套接字，但操作的是本地文件系统路径，而不是 IP 地址和端口。
+UDP 是一种无连接协议，提供简单但不可靠的数据报服务。它适用于速度至关重要且可以接受少量数据丢失的应用，如游戏或语音聊天。
 
--   **`UnixListener`** 和 **`UnixStream`**：用于面向连接的、基于流的通信，类似于 TCP。
--   **`UnixDatagram`**：用于无连接的、基于数据报的通信，类似于 UDP。
--   **`UnixSocket`**：用于高级配置的较低级别套接字。
+`UdpSocket` 类型主要有两种使用方式：
 
-这些类型仅在 Unix 平台上可用。
+1.  **一对多**：一个绑定到某个地址的套接字可以使用 `send_to` 和 `recv_from` 向许多不同的远程对等端发送和接收数据报。
+2.  **一对一**：一个套接字可以 `connect` 到单个远程对等端，从而可以使用 `send` 和 `recv` 进行通信，这会将传入的数据包过滤为仅来自该地址的数据包。
 
-## 自定义 I/O 资源
+### 示例：一对多 UDP 回显服务器
 
-对于 `tokio::net` 中未原生提供的 I/O 资源，例如原始套接字或其他平台特定的句柄，您可以使用 [`AsyncFd`](./api-io.md) 将它们与 Tokio 运行时集成。这使您能够对任何可以被操作系统事件队列（如 epoll、kqueue 或 IOCP）监视的文件描述符执行非阻塞 I/O 操作。
+该服务器绑定到一个地址，并将接收到的任何数据报回显给其原始发送方。
+
+```rust,no_run
+use tokio::net::UdpSocket;
+use std::io;
+
+#[tokio::main]
+async fn main() -> io::Result<()> {
+    let sock = UdpSocket::bind("0.0.0.0:8080").await?;
+    let mut buf = [0; 1024];
+    loop {
+        let (len, addr) = sock.recv_from(&mut buf).await?;
+        println!("{:?} bytes received from {:?}", len, addr);
+
+        let len = sock.send_to(&buf[..len], addr).await?;
+        println!("{:?} bytes sent", len);
+    }
+}
+```
+
+### 共享 `UdpSocket`
+
+由于其方法接收的是 `&self` 而不是 `&mut self`，因此可以通过将 `UdpSocket` 包装在 `Arc<UdpSocket>` 中，在多个任务之间安全地共享以进行并发读写。
+
+## Unix 域套接字 (UDS)
+
+Unix 域套接字仅在类 Unix 系统上可用，它有助于在同一台机器上进行进程间通信 (IPC)。它们的行为类似于 TCP 流，但使用文件系统路径进行寻址，而不是 IP 地址和端口。
+
+-   **`UnixListener`** 和 **`UnixStream`**：提供面向流的连接，类似于 TCP。
+-   **`UnixDatagram`**：提供基于数据报的套接字，类似于 UDP。
+-   **`UnixSocket`**：一个用于创建和配置 Unix 套接字的底层工具。
+
+## 平台特定的网络
+
+Tokio 还包含用于特定操作系统网络功能的模块。
+
+-   **Windows**：`tokio::net::windows` 模块提供对命名管道的支持。
+-   **Unix**：`tokio::net::unix` 模块包含 UDS 类型以及通过 `tokio::net::unix::pipe` 对 FIFO 管道的支持。
+
+## 工具
+
+### DNS 解析
+
+`lookup_host` 函数提供了一种执行 DNS 解析的异步方式。
+
+### 地址处理
+
+网络类型使用 `ToSocketAddrs` trait 将各种地址表示形式转换为一个或多个 `SocketAddr` 实例。
 
 ---
 
-现在您已经对 Tokio 的网络功能有了大致了解，可以继续探索为其提供支持的[异步 I/O 特征和辅助工具](./api-io.md)，或深入了解用于在网络应用程序中管理状态的[同步原语](./api-sync.md)。
+借助这些网络原语，您可以构建各种各样的应用程序。要获取更多实践示例，请查看 [示例](./examples.md) 部分。要了解底层的 I/O 操作，请参阅 [I/O API 参考](./api-io.md)。
