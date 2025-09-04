@@ -1,39 +1,41 @@
 # Signals
 
-This module provides support for asynchronous signal handling. Signals are a form of inter-process communication, and handling them correctly can be complex. This implementation aims to follow best practices, but you should evaluate its suitability for your specific application needs.
+Asynchronous signal handling for Tokio. This module provides tools to handle OS signals in an asynchronous manner, integrating them into the Tokio runtime.
 
-Note that signal handling is platform-specific. Tokio provides different APIs for Unix and Windows to accommodate their distinct models.
+Signal handling is a complex topic and should be approached with care. This implementation follows best practices but should be evaluated for your application's specific needs. Note that there are fundamental limitations documented on the OS-specific structures.
 
-A common use case is to gracefully shut down a server on `CTRL+C`.
+### Cross-Platform `ctrl_c`
+
+A common requirement is to gracefully shut down on `Ctrl-C`. Tokio provides a convenient, cross-platform function for this.
 
 ```rust,no_run
 use tokio::signal;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("Waiting for CTRL+C...");
+    println!("Waiting for Ctrl-C...");
     signal::ctrl_c().await?;
-    println!("CTRL+C received, shutting down.");
+    println!("Ctrl-C received, shutting down.");
     Ok(())
 }
 ```
 
 ---
 
-## Unix Signals
+## Unix-Specific Signals
 
-On Unix platforms, you can listen for arbitrary signals. The primary types for this are `Signal`, which represents the listener, and `SignalKind`, which specifies the signal.
+On Unix platforms, `tokio::signal::unix` provides the primary `Signal` type for receiving notifications for a wide range of signals.
 
-### `signal()`
+### Caveats
 
-Creates a new listener for a specified signal kind. This returns a `Signal` instance that can be used to receive notifications.
+There are important limitations to keep in mind when using Unix signals:
 
-**Important Caveats:**
+*   **Signal Coalescing**: If multiple signals are received before being processed, they may be coalesced into a single notification. An event from the stream corresponds to *at least one* signal.
+*   **Persistent Signal Handlers**: The first time a listener is registered for a particular signal, an OS-level signal handler is installed for the entire duration of the process. This handler is **not** unregistered when the `Signal` instance is dropped. This means the default process behavior (like terminating on `SIGINT`) is permanently replaced.
 
-*   **Signal Coalescing**: If multiple signals are received before the listener is polled, they will be coalesced into a single notification. After polling, the next signal is guaranteed to generate a new notification.
-*   **Persistent Handler**: The first time a listener is created for a particular signal, an OS-level signal handler is installed for the entire duration of the process. This behavior is not reset even if the `Signal` instance is dropped. For example, listening for `SIGINT` will prevent the default behavior of process termination for subsequent `SIGINT` signals.
+### Creating a Signal Listener
 
-**Example: Waiting for `SIGHUP`**
+The `signal` function creates a new listener for a specific `SignalKind`.
 
 ```rust,no_run
 # #[cfg(unix)] {
@@ -53,65 +55,84 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 # }
 ```
 
-### `Signal` Struct
+### `Signal` Methods
 
-A listener for receiving a specific OS signal. It provides two main methods for receiving notifications.
+The `Signal` struct is the listener that receives notifications.
 
-*   `recv()`: An `async` method that resolves when the next signal is received.
-*   `poll_recv()`: A method for use in manual `Future` implementations that polls for the next signal.
+| Method | Description |
+|---|---|
+| `recv(&mut self)` | Asynchronously waits for the next signal notification. Returns `None` if the stream is closed. This method is cancel-safe. |
+| `poll_recv(&mut self, cx: &mut Context<'_'>)` | Polls for the next signal notification in a non-async context. Returns `Poll::Ready(Some(()))` if a signal is available. |
 
-### `SignalKind` Struct
 
-Represents the specific kind of signal to listen for. It provides constructor methods for common signals.
+### Signal Kinds
+
+The `SignalKind` struct represents a specific Unix signal. You can use predefined kinds or create one from a raw integer value for platform-specific signals.
 
 <x-cards data-columns="3">
-  <x-card data-title="alarm()" data-icon="lucide:alarm-clock">SIGALRM: Sent when a real-time timer has expired.</x-card>
-  <x-card data-title="child()" data-icon="lucide:baby">SIGCHLD: Sent when the status of a child process has changed.</x-card>
-  <x-card data-title="hangup()" data-icon="lucide:phone-off">SIGHUP: Sent when the terminal is disconnected.</x-card>
-  <x-card data-title="interrupt()" data-icon="lucide:keyboard">SIGINT: Sent to interrupt a program (e.g., Ctrl+C).</x-card>
-  <x-card data-title="io()" data-icon="lucide:arrow-left-right">SIGIO: Sent when I/O operations are possible on a file descriptor.</x-card>
-  <x-card data-title="pipe()" data-icon="lucide:pipeline">SIGPIPE: Sent when writing to a pipe with no reader.</x-card>
-  <x-card data-title="quit()" data-icon="lucide:log-out">SIGQUIT: Sent to terminate the process and dump core.</x-card>
-  <x-card data-title="terminate()" data-icon="lucide:shield-x">SIGTERM: Sent to request a graceful process shutdown.</x-card>
-  <x-card data-title="user_defined1()" data-icon="lucide:user-cog">SIGUSR1: A user-defined signal.</x-card>
-  <x-card data-title="user_defined2()" data-icon="lucide:user-cog">SIGUSR2: A user-defined signal.</x-card>
-  <x-card data-title="window_change()" data-icon="lucide:rectangle-horizontal">SIGWINCH: Sent when the terminal window is resized.</x-card>
-  <x-card data-title="from_raw()" data-icon="lucide:hash">Allows listening for any valid OS signal by its raw integer value.</x-card>
+  <x-card data-title="alarm()" data-icon="lucide:alarm-clock">Represents the `SIGALRM` signal, sent when a real-time timer expires.</x-card>
+  <x-card data-title="child()" data-icon="lucide:baby">Represents the `SIGCHLD` signal, sent when a child process changes status.</x-card>
+  <x-card data-title="hangup()" data-icon="lucide:phone-off">Represents the `SIGHUP` signal, sent when a terminal is disconnected.</x-card>
+  <x-card data-title="interrupt()" data-icon="lucide:keyboard">Represents the `SIGINT` signal, sent to interrupt a program (e.g., Ctrl-C).</x-card>
+  <x-card data-title="io()" data-icon="lucide:arrow-right-left">Represents the `SIGIO` signal, sent when I/O is possible on a file descriptor.</x-card>
+  <x-card data-title="pipe()" data-icon="lucide:pipe">Represents the `SIGPIPE` signal, sent on write to a pipe with no readers.</x-card>
+  <x-card data-title="quit()" data-icon="lucide:log-out">Represents the `SIGQUIT` signal, sent to request a process shutdown and core dump.</x-card>
+  <x-card data-title="terminate()" data-icon="lucide:siren">Represents the `SIGTERM` signal, sent to request a graceful process shutdown.</x-card>
+  <x-card data-title="user_defined1()" data-icon="lucide:user">Represents the `SIGUSR1` signal, a user-defined signal.</x-card>
+  <x-card data-title="user_defined2()" data-icon="lucide:users">Represents the `SIGUSR2` signal, another user-defined signal.</x-card>
+  <x-card data-title="window_change()" data-icon="lucide:rectangle-horizontal">Represents the `SIGWINCH` signal, sent when the terminal window is resized.</x-card>
+  <x-card data-title="from_raw(signum)" data-icon="lucide:hash">Creates a `SignalKind` from a raw integer signal number for OS-specific signals.</x-card>
 </x-cards>
 
 ---
 
-## Windows Signals
+## Windows-Specific Signals
 
-On Windows, signal handling is based on console control events. Tokio provides separate functions to create listeners for each specific event type.
+On Windows, `tokio::signal::windows` allows receiving console control events like `CTRL_C_EVENT`, `CTRL_BREAK_EVENT`, and shutdown events via `SetConsoleCtrlHandler`.
 
-Like the Unix implementation, notifications are coalesced. If multiple events of the same type occur before the listener is polled, they will be delivered as a single notification.
+Like the Unix implementation, notifications are coalesced. If multiple events occur in rapid succession, the listener may only receive a single notification.
+
+### Available Listeners
+
+Functions are available to create listeners for specific console control events.
 
 <x-cards data-columns="2">
-  <x-card data-title="ctrl_c()" data-icon="lucide:keyboard">Creates a listener that receives notifications when the user presses `Ctrl+C`.</x-card>
-  <x-card data-title="ctrl_break()" data-icon="lucide:keyboard">Creates a listener for `Ctrl+Break` events.</x-card>
-  <x-card data-title="ctrl_close()" data-icon="lucide:x-square">Creates a listener for `Ctrl+Close` events, sent when the console window is closed.</x-card>
-  <x-card data-title="ctrl_shutdown()" data-icon="lucide:power-off">Creates a listener for `Ctrl+Shutdown` events, sent when the system is shutting down.</x-card>
-  <x-card data-title="ctrl_logoff()" data-icon="lucide:log-out">Creates a listener for `Ctrl+Logoff` events, sent when the user logs off.</x-card>
+  <x-card data-title="ctrl_c()" data-icon="lucide:keyboard">Creates a listener for `CTRL_C_EVENT` notifications.</x-card>
+  <x-card data-title="ctrl_break()" data-icon="lucide:keyboard">Creates a listener for `CTRL_BREAK_EVENT` notifications.</x-card>
+  <x-card data-title="ctrl_close()" data-icon="lucide:x-square">Creates a listener for `CTRL_CLOSE_EVENT` notifications, sent when the console window is closed.</x-card>
+  <x-card data-title="ctrl_shutdown()" data-icon="lucide:power-off">Creates a listener for `CTRL_SHUTDOWN_EVENT` notifications, sent when the system is shutting down.</x-card>
+  <x-card data-title="ctrl_logoff()" data-icon="lucide:log-out">Creates a listener for `CTRL_LOGOFF_EVENT` notifications, sent when the user logs off.</x-card>
 </x-cards>
 
-Each of these functions returns a dedicated struct (e.g., `CtrlC`, `CtrlBreak`) with `recv()` and `poll_recv()` methods, which behave identically to their Unix counterparts.
+### Usage
 
-**Example: Handling `Ctrl+Break`**
+Each function returns a corresponding struct (e.g., `ctrl_c()` returns `CtrlC`). All of these structs provide the same `recv()` and `poll_recv()` methods for consuming events.
+
+Here is an example of handling `CTRL-BREAK` events:
 
 ```rust,no_run
+# #[cfg(windows)] {
 use tokio::signal::windows::ctrl_break;
-use std::io;
 
 #[tokio::main]
-async fn main() -> io::Result<()> {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Create a listener for CTRL-BREAK events.
     let mut stream = ctrl_break()?;
 
+    // Print whenever a CTRL-BREAK event is received.
     loop {
         stream.recv().await;
-        println!("got CTRL-BREAK signal");
+        println!("got signal CTRL-BREAK");
     }
 }
+# }
 ```
 
-Now that you've learned about signal handling, you might be interested in managing child processes asynchronously. See the [Processes](./api-process.md) documentation for more details.
+### Listener Methods
+
+All Windows signal listener structs (`CtrlC`, `CtrlBreak`, etc.) have the following methods:
+
+| Method | Description |
+|---|---|
+| `recv(&mut self)` | Asynchronously waits for the next notification. Returns `None` if the listener is closed. |
+| `poll_recv(&mut self, cx: &mut Context<'_'>)` | Polls for the next notification in a non-async context. |

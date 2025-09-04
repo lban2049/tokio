@@ -1,31 +1,23 @@
 # 示例
 
-本节提供了一系列可运行的代码示例，用于演示 Tokio 的各种功能和用例。这些示例切合实用，可作为您开发自己应用程序的起点。
+本节提供了一系列可运行的示例，以帮助你了解如何使用 Tokio 的各种功能。这些示例旨在以最少的设置即可复制和运行。如需更全面的示例集，你可以浏览 [GitHub 上的 Tokio 仓库](https://github.com/tokio-rs/tokio/tree/master/examples)。
 
-<x-cards data-columns="1">
-  <x-card data-title="TCP Echo Server" data-icon="lucide:server">
-    这是一个异步 TCP 服务器的基础示例，它会回显从客户端接收到的任何数据。这是理解基本网络 I/O 的绝佳起点。
-  </x-card>
-  <x-card data-title="Mini-Redis" data-icon="lucide:database">
-    这是一个更大型的“真实世界”示例，实现了一个简化的 Redis 服务器。它演示了如何构建完整的应用程序、管理共享状态以及处理客户端命令。
-  </x-card>
-</x-cards>
+## TCP 回声服务器
 
-## TCP Echo 服务器
+这是一个基本的 TCP 回声服务器，它监听传入的连接，并将其接收到的任何数据发回。这是一个经典的示例，用于演示异步 I/O 和任务管理。
 
-简单的 TCP echo 服务器是演示异步 I/O 的经典方法。服务器监听一个套接字，接受传入的连接，并为每个连接读取数据，然后将数据写回同一个套接字。
+### 设置
 
-### 依赖
-
-要运行此示例，您需要在 `Cargo.toml` 文件中启用必要的功能。使用 `full` 功能标志是上手最简单的方式。
+首先，将必要的依赖项添加到你的 `Cargo.toml` 文件中。`full` 功能标志启用了所有公共的 Tokio API，这对于入门非常方便。
 
 ```toml
+[dependencies]
 tokio = { version = "1", features = ["full"] }
 ```
 
-### 服务器代码
+### 代码
 
-以下代码实现了完整的 echo 服务器：
+现在，你可以在你的 `main.rs` 文件中使用以下代码：
 
 ```rust,no_run
 use tokio::net::TcpListener;
@@ -41,7 +33,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tokio::spawn(async move {
             let mut buf = [0; 1024];
 
-            // 循环中，从套接字读取数据并将数据写回。
+            // 在循环中，从套接字读取数据并将其写回。
             loop {
                 let n = match socket.read(&mut buf).await {
                     // 套接字已关闭
@@ -64,24 +56,43 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-### 工作原理
+此代码在 8080 端口上设置一个监听器。对于每个传入的连接，它会生成一个新的异步任务来处理通信。该任务将数据读入缓冲区，并将其写回到同一个套接字，直到连接关闭。
 
-1.  **`TcpListener::bind`**：服务器首先将 `TcpListener` 绑定到本地地址（`127.0.0.1:8080`）。`.await` 关键字会暂停执行，直到监听器成功绑定。
-2.  **`listener.accept()`**：服务器进入一个循环，调用 `listener.accept().await` 等待传入的连接。当客户端连接时，`accept` 会返回一个新的 `TcpSocket` 和客户端的地址。
-3.  **`tokio::spawn`**：为了并发处理多个客户端，会为每个已接受的连接生成一个新任务。`socket` 会被移入这个新任务中。
-4.  **读/写循环**：在生成的任务内部，一个循环会持续从套接字读取数据到缓冲区。如果读取成功（`Ok(n)` 且 `n > 0`），则会将相同的数据（`&buf[0..n]`）写回套接字。如果客户端关闭连接，`read` 会返回 `Ok(0)`，任务随之终止。
+## 处理阻塞操作
 
-## 高级示例：Mini-Redis
+异步任务不应直接执行阻塞操作，因为这会停止同一线程上其他任务的进展。对于阻塞或 CPU 密集型工作，请使用 `spawn_blocking` 函数将工作移至专用的线程池。
 
-如需更详尽的真实世界示例，请参阅 [mini-redis 代码库](https://github.com/tokio-rs/mini-redis/)。该项目是使用 Tokio 构建的 Redis 服务器和客户端的异步、简化实现。
+```rust,no_run
+#[tokio::main]
+async fn main() {
+    // 这在核心线程上运行。
 
-它是学习如何构建更大型 Tokio 应用程序的绝佳资源，并演示了以下概念：
+    let blocking_task = tokio::task::spawn_blocking(|| {
+        // 这在阻塞线程上运行。
+        // 在这里阻塞是可以的。
+        // 例如，计算密集型任务或同步文件读取。
+        "done"
+    });
 
-- 管理跨任务的共享可变状态。
-- 帧处理（Framing），即将字节流解析为消息序列的过程。
-- 优雅关闭。
-- 实现协议的客户端和服务器端。
+    // 我们可以像这样等待阻塞任务：
+    // 如果阻塞任务发生 panic，下面的 unwrap 将传播该
+    // panic。
+    let result = blocking_task.await.unwrap();
+    println!("Blocking task finished with result: {}", result);
+}
+```
 
-## 更多示例
+`spawn_blocking` 函数接受一个闭包，并在 Tokio 运行时管理的独立线程池上执行它。这可以防止主异步调度程序被阻塞。对返回的 `JoinHandle` 进行 `await` 操作，允许异步任务等待阻塞操作完成而不会暂停线程。
 
-更多涵盖 Tokio 各种功能的示例，可以在 [Tokio GitHub 代码库的 examples 目录](https://github.com/tokio-rs/tokio/tree/master/examples)中找到。这些示例简明地演示了特定的 API，是学习的宝贵资源。
+## 进一步探索
+
+对于更高级和真实世界的用例，以下资源提供了丰富的示例。
+
+<x-cards data-columns="2">
+  <x-card data-title="官方 Tokio 示例" data-icon="lucide:github" data-href="https://github.com/tokio-rs/tokio/tree/master/examples" data-cta="View on GitHub">
+    官方 Tokio 仓库中的综合示例集合，涵盖了各种模块和功能。
+  </x-card>
+  <x-card data-title="Mini-Redis" data-icon="lucide:database" data-href="https://github.com/tokio-rs/mini-redis" data-cta="View on GitHub">
+    一个更大、更“真实世界”的客户端-服务器应用程序示例，该应用使用 Tokio 构建，展示了更复杂的应用程序结构。
+  </x-card>
+</x-cards>

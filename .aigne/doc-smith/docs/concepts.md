@@ -1,124 +1,99 @@
 # Core Concepts
 
-Tokio is an event-driven, non-blocking I/O platform for writing asynchronous applications with Rust. To build reliable and high-performance network applications, it's helpful to understand the fundamental components that make up the Tokio runtime. This section provides a high-level overview of these core concepts, forming a solid foundation for more advanced usage.
+Tokio is an event-driven, non-blocking I/O platform for writing asynchronous applications with Rust. To use Tokio effectively, it's important to understand its fundamental components. This section provides a high-level overview of the key concepts that form the foundation of the Tokio runtime, giving you a solid base for building advanced applications.
 
-At a high level, Tokio's architecture is built around a few major components that work together to execute your asynchronous code efficiently.
+At a high level, Tokio is composed of several key parts that work in concert:
 
 ```d2
 direction: down
 
-"Tokio Runtime" {
+"Tokio-Runtime": {
+  label: "Tokio Runtime"
   shape: package
   grid-columns: 1
   grid-gap: 50
 
-  "Core Components" {
-    grid-columns: 2
+  "Core-Components": {
+    label: "Core Components"
+    shape: rectangle
+    grid-columns: 3
 
-    "Scheduler": {
-      shape: rectangle
-      "Manages and executes tasks"
+    Scheduler: {
+      label: "Task Scheduler"
     }
-
-    "I/O Driver": {
-      shape: rectangle
-      "Interfaces with OS events (epoll, kqueue, IOCP)"
+    "I-O-Driver": {
+      label: "I/O Driver\n(epoll, kqueue, IOCP)"
     }
-  }
-
-  "User-Facing APIs" {
-    grid-columns: 2
-    grid-gap: 20
-
-    "Tasks": {
-      shape: package
-      "spawn()"
-      "JoinHandle"
-      "spawn_blocking()"
-    }
-
-    "Asynchronous I/O": {
-      shape: package
-      "TCP / UDP"
-      "Filesystem"
-      "Signals"
-      "Processes"
-    }
-
-    "Synchronization Primitives": {
-      shape: package
-      "Channels (mpsc, oneshot)"
-      "Mutex"
-      "Barrier"
-    }
-
-    "Timers": {
-      shape: package
-      "sleep()"
-      "interval()"
-      "timeout()"
+    Timer: {
+      label: "High-Performance Timer"
     }
   }
 
-  "Core Components".Scheduler -> "User-Facing APIs".Tasks: "Executes"
-  "Core Components"."I/O Driver" -> "User-Facing APIs"."Asynchronous I/O": "Drives"
+  "User-Code": {
+    label: "User Code"
+    shape: rectangle
+    grid-columns: 2
+
+    "Async-Task-1": {
+      label: "Async Task 1"
+    }
+    "Async-Task-2": {
+      label: "Async Task 2"
+    }
+    "...": {}
+    "Async-Task-N": {
+      label: "Async Task N"
+    }
+  }
+
+  "OS-Resources": {
+    label: "OS Resources"
+    shape: rectangle
+    grid-columns: 2
+
+    "TCP-Socket": { 
+      label: "TCP Socket"
+      shape: cylinder 
+    }
+    File: { 
+      shape: cylinder 
+    }
+    "UDP-Socket": { 
+      label: "UDP Socket"
+      shape: cylinder 
+    }
+    Process: { 
+      shape: cylinder 
+    }
+  }
+
+  "Core-Components".Scheduler -> "User-Code": "Executes"
+  "User-Code"."Async-Task-1" -> "OS-Resources"."TCP-Socket": "Performs I/O"
+  "OS-Resources" -> "Core-Components"."I-O-Driver": "Registers with"
+  "Core-Components"."I-O-Driver" -> "Core-Components".Scheduler: "Notifies readiness"
 }
-
-"Your Application Code" {
-  shape: rectangle
-}
-
-"Your Application Code" -> "Tokio Runtime"."User-Facing APIs": "Uses"
-
 ```
 
-Below, we explore each of these fundamental building blocks. Each card links to a more detailed guide on the specific topic.
+Explore the fundamental concepts in more detail below:
 
 <x-cards data-columns="2">
-  <x-card data-title="Tasks & Scheduling" data-href="/concepts/tasks" data-icon="lucide:workflow">
-    Asynchronous programs in Rust are built around lightweight, non-blocking units of execution called tasks. Learn how to spawn, manage, and coordinate these tasks on the Tokio runtime.
+  <x-card data-title="Tasks & Scheduling" data-icon="lucide:box" data-href="/concepts/tasks">
+    Learn about the basic unit of execution in Tokio: the asynchronous task. This includes how to spawn new tasks, await their results, and manage blocking or CPU-intensive operations without halting the entire runtime.
   </x-card>
-  <x-card data-title="Asynchronous I/O" data-href="/concepts/io" data-icon="lucide:arrow-right-left">
-    Tokio provides a suite of non-blocking APIs for I/O operations, including networking (TCP, UDP), filesystem access, and inter-process communication, all without blocking threads.
+  <x-card data-title="Asynchronous I/O" data-icon="lucide:arrow-right-left" data-href="/concepts/io">
+    Explore Tokio's non-blocking primitives for I/O operations. This covers networking with TCP and UDP, filesystem access, and interacting with OS signals and child processes asynchronously.
   </x-card>
-  <x-card data-title="Synchronization" data-href="/concepts/synchronization" data-icon="lucide:lock">
-    When tasks need to communicate or share data, Tokio offers a set of synchronization primitives like channels, mutexes, and barriers, all designed for the asynchronous world.
+  <x-card data-title="Synchronization" data-icon="lucide:lock" data-href="/concepts/synchronization">
+    Discover tools for managing shared state and communication between tasks. This includes various channel types (mpsc, oneshot, watch), mutexes for exclusive access, and other synchronization primitives.
   </x-card>
-  <x-card data-title="Timers" data-href="/concepts/timers" data-icon="lucide:timer">
-    Explore utilities for tracking time and scheduling future work. This includes setting timeouts, sleeping for a duration, or repeating an operation at a specific interval.
+  <x-card data-title="Timers" data-icon="lucide:timer" data-href="/concepts/timers">
+    Understand how to schedule work based on time. Learn to create delays (sleeps), set timeouts for operations, and execute code at regular intervals.
   </x-card>
-  <x-card data-title="The Runtime" data-href="/concepts/runtime" data-icon="lucide:server">
-    The runtime is the engine that executes asynchronous tasks. Delve into its components, including the task scheduler, I/O driver, and timer, and learn how to configure it for your needs.
+  <x-card data-title="The Runtime" data-icon="lucide:server" data-href="/concepts/runtime">
+    Dive into the engine that powers it all. Learn about the multi-threaded and current-thread schedulers, how the runtime is configured, and how it drives asynchronous code to completion.
   </x-card>
 </x-cards>
 
-## Handling Blocking Code
+These core components work together to provide a powerful and efficient platform for building reliable network applications. To get a deeper understanding, we recommend starting with the fundamental building block of any Tokio application.
 
-Tokio achieves high concurrency by running many tasks on a small number of threads. This model relies on tasks yielding control at `.await` points so other tasks can run. However, code that performs long-running, CPU-intensive computations or blocking I/O will prevent other tasks from running on the same thread.
-
-To handle this, Tokio provides a dedicated thread pool for blocking operations. You can offload blocking code to this pool using the `spawn_blocking` function, ensuring it doesn't interfere with the main asynchronous task scheduler.
-
-```rust
-#[tokio::main]
-async fn main() {
-    // This is running on a core scheduler thread.
-
-    let blocking_task = tokio::task::spawn_blocking(|| {
-        // This is running on a dedicated blocking thread.
-        // Performing a blocking operation here is okay.
-        std::thread::sleep(std::time::Duration::from_secs(1));
-        "done"
-    });
-
-    // We can wait for the blocking task to complete without blocking the scheduler.
-    let result = blocking_task.await.unwrap();
-    assert_eq!(result, "done");
-}
-```
-This separation is crucial for building responsive applications that mix asynchronous and synchronous code.
-
----
-
-With this overview, you have a map of Tokio's core architecture. The best place to start a deeper dive is with tasks, as they are the fundamental unit of execution in any Tokio application.
-
-Next, we recommend reading about [Tasks & Scheduling](./concepts-tasks.md) to understand how your asynchronous code is executed.
+Next, let's dive into [Tasks & Scheduling](./concepts-tasks.md).

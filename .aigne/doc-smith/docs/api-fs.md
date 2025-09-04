@@ -1,24 +1,22 @@
 # Filesystem
 
-This module provides asynchronous utilities for working with the file system. This includes reading from and writing to files, as well as manipulating directories.
+Asynchronous utilities for file and filesystem manipulation.
 
-Be aware that most operating systems do not provide asynchronous file system APIs. Because of this, Tokio will use ordinary blocking file operations behind the scenes. This is done using a dedicated thread pool to run them in the background. For more details on this, see the [Tasks & Scheduling](./concepts-tasks.md) documentation.
+This module provides utility methods for performing asynchronous I/O with the filesystem. This includes reading and writing to files, as well as manipulating directories.
 
-The `tokio::fs` module should only be used for ordinary files. Trying to use it with special files, such as a named pipe on Linux, can result in surprising behavior. For special files, you should use a dedicated type like `tokio::net::unix::pipe` or `AsyncFd` instead.
+It's important to understand that most operating systems do not provide native asynchronous file system APIs. Consequently, Tokio executes standard blocking file operations on a dedicated thread pool using `spawn_blocking`. While Tokio may adopt newer asynchronous APIs like `io_uring` in the future, the current implementation relies on this thread-based approach.
 
-## Quick Start: Reading and Writing Files
+**Note:** The `tokio::fs` module is designed for ordinary files. Using it with special files, such as named pipes on Linux, can lead to unexpected behavior like hangs. For these cases, use dedicated types like `tokio::net::unix::pipe` or `AsyncFd`.
 
-The easiest way to use this module is with the utility functions that operate on entire files at once.
+## Quick Start: Reading and Writing Entire Files
 
-| Function | Description |
-|---|---|
-| `tokio::fs::read` | Asynchronously reads the entire contents of a file into a `Vec<u8>`. |
-| `tokio::fs::read_to_string` | Asynchronously reads the entire contents of a file into a string. |
-| `tokio::fs::write` | Asynchronously writes a slice of bytes to a file, overwriting existing content. |
+The most straightforward way to interact with files is through the utility functions that handle the entire file at once.
 
-### Reading a file to a string
+*   `tokio::fs::read`: Reads the entire file into a `Vec<u8>`.
+*   `tokio::fs::read_to_string`: Reads the entire file into a `String`.
+*   `tokio::fs::write`: Writes a slice of bytes to a file, overwriting existing content.
 
-This example reads the entire contents of `my_file.txt` and prints the number of lines.
+### Read a file to a string
 
 ```rust
 # async fn dox() -> std::io::Result<()> {
@@ -29,9 +27,7 @@ println!("File has {} lines.", contents.lines().count());
 # }
 ```
 
-### Writing a file
-
-This example writes a string to `my_file.txt`, overwriting the file if it already exists.
+### Write to a file
 
 ```rust
 # async fn dox() -> std::io::Result<()> {
@@ -42,15 +38,15 @@ tokio::fs::write("my_file.txt", contents.as_bytes()).await?;
 # }
 ```
 
-## The `File` Type
+## Advanced Usage with `File`
 
-For more complex operations than reading or writing an entire file, the [`File`](#file-struct) struct is the main tool. It implements the `AsyncRead` and `AsyncWrite` traits, allowing for buffered or chunk-based I/O.
+For more complex scenarios, such as streaming data or avoiding loading an entire file into memory, use the `File` struct. It implements the `AsyncRead` and `AsyncWrite` traits for fine-grained I/O operations.
 
-**Note:** It is important to use `flush` when writing to a Tokio `File`. Calls to `write` will return before the write has finished. The `flush` method will wait for the write to complete. This is different from `std::fs::File` and is a consequence of using a background thread pool for I/O operations.
+**Important:** When writing to a Tokio `File`, you must call `flush()` to ensure the write operation completes. Because `File` uses `spawn_blocking` internally, `write` calls can return before the data is actually written by the background thread. `flush()` waits for this background operation to finish.
 
 ### Reading a file in chunks
 
-This example counts the number of lines in a file without loading the entire file into memory.
+This example counts lines without loading the entire file into memory.
 
 ```rust,no_run
 use tokio::fs::File;
@@ -100,11 +96,11 @@ file.flush().await?;
 
 ## Performance Tuning
 
-Because Tokio's file I/O uses a thread pool, each operation can have some overhead. To get good performance, it is recommended to batch your operations into as few calls as possible.
+Since Tokio's file I/O relies on `spawn_blocking`, each operation can introduce overhead. To achieve good performance, batch your operations into as few `spawn_blocking` calls as possible.
 
-Here are some strategies:
+Here are some effective strategies:
 
-1.  **Buffer in Memory:** When creating a file, write the data to a `String` or `Vec<u8>` in memory first, then write the entire buffer to the file in a single call with `tokio::fs::write`.
+1.  **Buffer in memory, then write once:** Collect data in a `String` or `Vec<u8>` and write the entire buffer with a single call to `tokio::fs::write`.
 
     ```rust,no_run
     # async fn dox() -> std::io::Result<()> {
@@ -119,7 +115,7 @@ Here are some strategies:
     # }
     ```
 
-2.  **Use `BufWriter`:** Use `tokio::io::BufWriter` to buffer many small writes into fewer, larger ones. The actual write to the file happens when the buffer is full or when you explicitly call `flush()`.
+2.  **Use `BufWriter`:** `BufWriter` buffers small writes and flushes them as a single larger write, reducing the number of underlying system calls.
 
     ```rust,no_run
     use tokio::fs::File;
@@ -132,13 +128,13 @@ Here are some strategies:
     file.write_all(b"Second line.\n").await?;
     file.write_all(b"Third line.\n").await?;
 
-    // The actual write and blocking call happens when you flush.
+    // The actual write and spawn_blocking call happens when you flush.
     file.flush().await?;
     # Ok(())
     # }
     ```
 
-3.  **Manual `spawn_blocking`:** For full control, use the standard library's `std::fs` types inside a `tokio::task::spawn_blocking` call.
+3.  **Manual `spawn_blocking`:** For maximum control, perform standard library file I/O inside a `spawn_blocking` call yourself.
 
     ```rust,no_run
     use std::fs::File;
@@ -162,38 +158,67 @@ Here are some strategies:
     # }
     ```
 
-## Key Types and Functions
+You can also adjust the amount of data Tokio processes in a single `spawn_blocking` call using `File::set_max_buf_size`.
 
-### Structs
+## Key Structs
 
-| Struct | Description |
-|---|---|
-| `File` | A reference to an open file on the filesystem. Implements `AsyncRead`, `AsyncWrite`, and `AsyncSeek`. |
-| `OpenOptions` | A builder for configuring how a file is opened. |
-| `DirBuilder` | A builder for creating directories with specific options. |
-| `ReadDir` | A stream over the entries within a directory. |
-| `DirEntry` | An entry in a directory, returned by `ReadDir`. |
+<x-cards data-columns="2">
+  <x-card data-title="File" data-icon="lucide:file-text">
+    An asynchronous handle to an open file on the filesystem.
+  </x-card>
+  <x-card data-title="OpenOptions" data-icon="lucide:settings-2">
+    A builder for configuring how a file is opened with specific options.
+  </x-card>
+  <x-card data-title="ReadDir" data-icon="lucide:folder-open">
+    A stream that yields the entries within a directory.
+  </x-card>
+  <x-card data-title="DirEntry" data-icon="lucide:file">
+    A single entry read from a directory, returned by `ReadDir`.
+  </x-card>
+  <x-card data-title="DirBuilder" data-icon="lucide:folder-plus">
+    A builder for creating directories with specific options, like setting the mode on Unix.
+  </x-card>
+</x-cards>
 
-### Functions
+## Functions
+
+### File Operations
 
 | Function | Description |
 |---|---|
-| `canonicalize` | Resolves a path to its canonical, absolute form. |
-| `copy` | Copies the contents of one file to another. |
+| `copy` | Copies the contents of one file to another asynchronously. |
+| `read` | Reads the entire contents of a file into a bytes vector. |
+| `read_to_string` | Reads the entire contents of a file into a string. |
+| `remove_file` | Removes a file. |
+| `write` | Writes a slice of bytes as the entire contents of a file. |
+
+### Directory Operations
+
+| Function | Description |
+|---|---|
 | `create_dir` | Creates a new, empty directory at the provided path. |
 | `create_dir_all` | Recursively creates a directory and all of its parent components if they are missing. |
-| `hard_link` | Creates a hard link on the filesystem. |
-| `metadata` | Queries the file system for metadata about a path. |
-| `read` | Reads the entire contents of a file into a byte vector. |
 | `read_dir` | Returns a stream over the entries within a directory. |
-| `read_link` | Reads a symbolic link, returning the path that it points to. |
-| `read_to_string` | Reads the entire contents of a file into a string. |
 | `remove_dir` | Removes an empty directory. |
 | `remove_dir_all` | Removes a directory at this path, after removing all its contents. |
-| `remove_file` | Removes a file. |
+
+### Filesystem Manipulation
+
+| Function | Description |
+|---|---|
 | `rename` | Renames a file or directory. |
-| `set_permissions` | Changes the permissions found on a file or a directory. |
-| `symlink` | Creates a new symbolic link on the filesystem (Unix-only). |
-| `symlink_metadata` | Queries metadata about a path without following symbolic links. |
+| `hard_link` | Creates a new hard link on the filesystem. |
+| `symlink` | Creates a new symbolic link on the filesystem. (Unix-specific) |
+| `symlink_dir` | Creates a new directory symbolic link on the filesystem. (Windows-specific) |
+| `symlink_file` | Creates a new file symbolic link on the filesystem. (Windows-specific) |
+
+### Metadata and Paths
+
+| Function | Description |
+|---|---|
+| `canonicalize` | Returns the canonical, absolute form of a path with all intermediate components normalized. |
+| `metadata` | Queries the file system metadata for a path, following symlinks. |
+| `symlink_metadata` | Queries the metadata of a file without following symbolic links. |
+| `read_link` | Reads a symbolic link, returning the path that the link points to. |
+| `set_permissions` | Changes the permissions of a file or directory. |
 | `try_exists` | Checks if a path exists on the filesystem. |
-| `write` | Writes a slice of bytes to a file. |

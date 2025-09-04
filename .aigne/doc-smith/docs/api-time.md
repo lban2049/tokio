@@ -2,46 +2,29 @@
 
 Utilities for tracking time. This module provides a number of types for executing code after a set period of time. These types must be used from within the context of the Tokio [`Runtime`](./api-runtime.md).
 
-The main time-related utilities are:
-
-```d2
-direction: down
-
-"Time Utilities": {
-    shape: package
-    grid-columns: 3
-
-    "Sleep": {
-        shape: rectangle
-        label: "Sleep\n(Wait for a specific duration)"
-    }
-
-    "Interval": {
-        shape: rectangle
-        label: "Interval\n(Execute code periodically)"
-    }
-
-    "Timeout": {
-        shape: rectangle
-        label: "Timeout\n(Limit future execution time)"
-    }
-}
-
-"Your Async Task" -> "Sleep": "Uses to pause execution"
-"Your Async Task" -> "Interval": "Uses for repeated tasks"
-"Your Async Task" -> "Timeout": "Is wrapped by to enforce a deadline"
-
-```
+<x-cards data-columns="3">
+  <x-card data-title="Sleep" data-icon="lucide:timer">
+    A future that does no work and completes at a specific `Instant` in time.
+  </x-card>
+  <x-card data-title="Interval" data-icon="lucide:repeat">
+    A stream yielding a value at a fixed period. It is initialized with a `Duration` and repeatedly yields each time the duration elapses.
+  </x-card>
+  <x-card data-title="Timeout" data-icon="lucide:alarm-clock-off">
+    Wraps a future or stream, setting an upper bound to the amount of time it is allowed to execute.
+  </x-card>
+</x-cards>
 
 ## Functions
 
-### sleep()
-
-Waits until `duration` has elapsed. This is an asynchronous analog to `std::thread::sleep`.
+### sleep
 
 `pub fn sleep(duration: Duration) -> Sleep`
 
-No work is performed while awaiting the sleep future. `Sleep` operates at millisecond granularity and may have a larger resolution on some platforms (like Windows).
+Waits until `duration` has elapsed. This is an asynchronous analog to `std::thread::sleep`.
+
+No work is performed while awaiting on the sleep future to complete. `Sleep` operates at millisecond granularity and should not be used for tasks that require high-resolution timers.
+
+To run something regularly on a schedule, see [`interval`](#interval).
 
 #### Cancellation
 
@@ -49,7 +32,7 @@ Canceling a sleep instance is done by dropping the returned future. No additiona
 
 #### Panics
 
-This function panics if no timer is configured in the Tokio runtime. This can happen if the runtime is built without `Builder::enable_time` or `Builder::enable_all`, or if `sleep` is called outside of a Tokio runtime context.
+This function panics if there is no current timer set, which can be triggered if the `enable_time` or `enable_all` features of the runtime builder are not enabled. It can also panic if a timer is created outside of a Tokio runtime.
 
 #### Example
 
@@ -63,17 +46,13 @@ async fn main() {
 }
 ```
 
-### sleep_until()
-
-Waits until `deadline` is reached.
+### sleep_until
 
 `pub fn sleep_until(deadline: Instant) -> Sleep`
 
-No work is performed while awaiting the sleep future to complete. Like `sleep`, it operates at millisecond granularity.
+Waits until `deadline` is reached.
 
-#### Panics
-
-This function panics if there is no current timer set, similar to `sleep()`.
+No work is performed while awaiting on the sleep future to complete. `Sleep` operates at millisecond granularity and should not be used for tasks that require high-resolution timers.
 
 #### Example
 
@@ -87,13 +66,13 @@ async fn main() {
 }
 ```
 
-### interval()
-
-Creates a new `Interval` that yields ticks at a specified `period`. The first tick completes immediately.
+### interval
 
 `pub fn interval(period: Duration) -> Interval`
 
-The key difference between `interval` and `sleep` in a loop is that `Interval` accounts for the time spent between ticks. If a task takes some time, `interval` will shorten the next wait period to maintain the overall frequency, whereas a loop with `sleep` would drift.
+Creates a new `Interval` that yields ticks with an interval of `period`. The first tick completes immediately. The default missed tick behavior is `Burst`.
+
+An interval will tick indefinitely. Dropping the `Interval` value cancels it.
 
 #### Panics
 
@@ -118,13 +97,12 @@ async fn main() {
     }
 }
 ```
-This code executes the task approximately every two seconds. If `sleep` were used instead of `interval.tick()`, it would execute every three seconds.
 
-### interval_at()
-
-Creates a new `Interval` that yields with an interval of `period`, with the first tick completing at the specified `start` time.
+### interval_at
 
 `pub fn interval_at(start: Instant, period: Duration) -> Interval`
+
+Creates a new `Interval` that yields with an interval of `period`, with the first tick completing at `start`.
 
 #### Panics
 
@@ -148,61 +126,55 @@ async fn main() {
 }
 ```
 
-### timeout()
-
-Requires a future to complete before a specified `duration` has elapsed.
+### timeout
 
 `pub fn timeout<F>(duration: Duration, future: F) -> Timeout<F::IntoFuture>`
 
-If the future completes in time, its value is returned as `Ok(value)`. Otherwise, an `Err(Elapsed)` is returned, and the future is canceled. The timeout is checked *before* polling the future, so a future that doesn't yield might run past the deadline without returning an error.
+Requires a `Future` to complete before the specified duration has elapsed. If the future completes in time, its value is returned in `Ok`. Otherwise, an `Err` containing an `Elapsed` error is returned, and the future is canceled.
 
-#### Panics
+#### Cancellation
 
-This function panics if there is no current timer set.
+Cancelling a timeout is done by dropping the `Timeout` future. The original future can be retrieved by calling `Timeout::into_inner`.
 
 #### Example
 
 ```rust
-use tokio::time::{timeout, Duration};
+use tokio::time::timeout;
 use tokio::sync::oneshot;
-
-async fn long_future() {
-    // Simulate work
-    tokio::time::sleep(Duration::from_secs(5)).await;
-}
+use std::time::Duration;
 
 #[tokio::main]
 async fn main() {
-    if let Err(_) = timeout(Duration::from_secs(1), long_future()).await {
-        println!("operation timed out");
+    let (_tx, rx) = oneshot::channel::<()>();
+
+    if let Err(_) = timeout(Duration::from_millis(10), rx).await {
+        println!("did not receive value within 10 ms");
     }
 }
 ```
 
-### timeout_at()
-
-Requires a future to complete before a specified `deadline`.
+### timeout_at
 
 `pub fn timeout_at<F>(deadline: Instant, future: F) -> Timeout<F::IntoFuture>`
 
-This functions similarly to `timeout` but takes a specific `Instant` as the deadline.
+Requires a `Future` to complete before the specified `Instant` in time.
 
 #### Example
 
 ```rust
-use tokio::time::{Instant, timeout_at, Duration};
+use tokio::time::{Instant, timeout_at};
 use tokio::sync::oneshot;
+use std::time::Duration;
 
-# async fn dox() {
-let (tx, rx) = oneshot::channel();
-# tx.send(()).unwrap();
+#[tokio::main]
+async fn main() {
+    let (_tx, rx) = oneshot::channel::<()>();
 
-// Wrap the future with a `Timeout` set to expire 10 milliseconds into the
-// future.
-if let Err(_) = timeout_at(Instant::now() + Duration::from_millis(10), rx).await {
-    println!("did not receive value within 10 ms");
+    let deadline = Instant::now() + Duration::from_millis(10);
+    if let Err(_) = timeout_at(deadline, rx).await {
+        println!("did not receive value within 10 ms");
+    }
 }
-# }
 ```
 
 ## Structs
@@ -211,17 +183,17 @@ if let Err(_) = timeout_at(Instant::now() + Duration::from_millis(10), rx).await
 
 A future returned by `sleep` and `sleep_until` that completes at a specified instant.
 
-This type does not implement `Unpin`. If you use it with `select!` or poll it manually, you must pin it first, for example with `tokio::pin!`.
+This type does not implement `Unpin`. If you use it with `select!` or by calling `poll`, you must pin it first.
 
 #### Methods
 
 | Method | Description |
 |---|---|
-| `deadline()` | Returns the `Instant` at which the future will complete. |
-| `is_elapsed()` | Returns `true` if the `Sleep` instance has elapsed. |
-| `reset(deadline: Instant)` | Resets the `Sleep` instance to a new deadline. |
+| `deadline(&self) -> Instant` | Returns the instant at which the future will complete. |
+| `is_elapsed(&self) -> bool` | Returns `true` if `Sleep` has elapsed. |
+| `reset(self: Pin<&mut Self>, deadline: Instant)` | Resets the `Sleep` instance to a new deadline. |
 
-#### Example: Resetting a Sleep
+#### Example: Resetting a `Sleep` in a loop
 
 ```rust
 use tokio::time::{self, Duration, Instant};
@@ -244,61 +216,58 @@ async fn main() {
 
 ### Interval
 
-A stream that yields at a regular interval.
-
-This type allows you to wait on a sequence of instants. Unlike calling `sleep` in a loop, it compensates for the time spent between calls to `tick()`.
+A type that allows you to wait for a sequence of instants with a certain duration between them.
 
 #### Methods
 
 | Method | Description |
 |---|---|
-| `tick()` | Asynchronously waits for the next tick, returning the `Instant` it was scheduled for. |
-| `poll_tick(&mut self, cx: &mut Context<'_'>)` | Polls for the next tick to be reached. |
-| `reset()` | Resets the interval to complete one period after the current time. |
-| `reset_at(deadline: Instant)` | Sets the next tick to expire at the given instant. |
-| `period()` | Returns the period of the interval. |
-| `missed_tick_behavior()` | Returns the current `MissedTickBehavior` strategy. |
-| `set_missed_tick_behavior(behavior)` | Sets the `MissedTickBehavior` strategy. |
+| `tick(&mut self) -> impl Future<Output = Instant>` | Completes when the next instant in the interval has been reached. |
+| `poll_tick(&mut self, cx: &mut Context<'_'>) -> Poll<Instant>` | Polls for the next instant in the interval to be reached. |
+| `reset(&mut self)` | Resets the interval to complete one period after the current time. |
+| `reset_at(&mut self, deadline: Instant)` | Sets the next tick to expire at the given instant. |
+| `period(&self) -> Duration` | Returns the period of the interval. |
+| `missed_tick_behavior(&self) -> MissedTickBehavior` | Returns the current `MissedTickBehavior` strategy. |
+| `set_missed_tick_behavior(&mut self, behavior: MissedTickBehavior)` | Sets the `MissedTickBehavior` strategy. |
+
 
 ### Timeout<T>
 
-A future returned by `timeout` and `timeout_at`.
-
-This future wraps another future, limiting its execution time.
+A future that cancels another future if it takes too long to complete. Returned by `timeout` and `timeout_at`.
 
 #### Methods
 
 | Method | Description |
 |---|---|
-| `get_ref()` | Gets a reference to the underlying future. |
-| `get_mut()` | Gets a mutable reference to the underlying future. |
-| `into_inner()` | Consumes the timeout, returning the underlying future. |
+| `get_ref(&self) -> &T` | Gets a reference to the underlying future. |
+| `get_mut(&mut self) -> &mut T` | Gets a mutable reference to the underlying future. |
+| `into_inner(self) -> T` | Consumes this timeout, returning the underlying future. |
 
 ### Instant
 
-A measurement of a monotonically nondecreasing clock.
+A measurement of a monotonically nondecreasing clock. This is a Tokio-aware wrapper around `std::time::Instant`.
 
-This type is a wrapper around `std::time::Instant` and is used to align with Tokio's internal clock, which is especially useful for testing with features like `time::pause()` and `time::advance()`.
+It is opaque and useful only with `Duration`. It allows measuring the duration between two instants or comparing them.
 
 #### Methods
 
 | Method | Description |
 |---|---|
-| `now()` | Returns an `Instant` corresponding to "now". |
-| `duration_since(earlier: Instant)` | Returns the `Duration` elapsed between `earlier` and this instant. |
-| `elapsed()` | Returns the `Duration` elapsed since this instant was created. |
-| `checked_add(duration: Duration)` | Adds a `Duration` to the `Instant`, returning `None` on overflow. |
-| `checked_sub(duration: Duration)` | Subtracts a `Duration` from the `Instant`, returning `None` on overflow. |
+| `now() -> Instant` | Returns an instant corresponding to "now". |
+| `elapsed(&self) -> Duration` | Returns the amount of time elapsed since this instant was created. |
+| `duration_since(&self, earlier: Instant) -> Duration` | Returns the amount of time elapsed from another instant to this one. |
+| `checked_add(&self, duration: Duration) -> Option<Instant>` | Adds a duration to the instant, returning `None` on overflow. |
+| `checked_sub(&self, duration: Duration) -> Option<Instant>` | Subtracts a duration from the instant, returning `None` if it would go before the earliest representable time. |
 
 ## Enums
 
 ### MissedTickBehavior
 
-Defines the behavior of an `Interval` when it misses a tick, for example, if the task between ticks takes longer than the interval period.
+Defines the behavior of an `Interval` when it misses a tick. A tick is missed if too much time is spent without calling `Interval::tick()`.
 
 #### Burst
 
-Ticks as fast as possible until caught up. This is the default behavior. It results in the `Interval` firing ticks rapidly to catch up to where it should have been in time.
+This is the default behavior. Ticks as fast as possible until caught up. The yielded `Instant`s are the same as they would have been if no ticks were missed.
 
 ```text
 Expected ticks: |     1     |     2     |     3     |     4     |     5     |     6     |
@@ -307,7 +276,7 @@ Actual ticks:   | work -----|          delay          | work | work | work -| wo
 
 #### Delay
 
-Reschedules the next tick to be a full `period` from the time `tick()` was last called, effectively shifting the schedule forward.
+Tick at multiples of `period` from when `tick` was last called, rather than from the original start time. This effectively resets the interval schedule after a long delay.
 
 ```text
 Expected ticks: |     1     |     2     |     3     |     4     |     5     |     6     |
@@ -316,9 +285,36 @@ Actual ticks:   | work -----|          delay          | work -----| work -----| 
 
 #### Skip
 
-Skips any missed ticks and schedules the next tick at the next multiple of `period` from the original start time.
+Skips any missed ticks and schedules the next tick on the next multiple of `period` from the original start time.
 
 ```text
 Expected ticks: |     1     |     2     |     3     |     4     |     5     |     6     |
 Actual ticks:   | work -----|          delay          | work ---| work -----| work -----|
+```
+
+#### Example of changing behavior
+
+```rust
+use tokio::time::{interval, Duration, MissedTickBehavior};
+
+# async fn task_that_takes_more_than_50_millis() { tokio::time::sleep(Duration::from_millis(60)).await; }
+
+#[tokio::main(flavor = "current_thread")]
+async fn main() {
+    let mut interval = interval(Duration::from_millis(50));
+    interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
+
+    // The first tick is immediate
+    interval.tick().await;
+
+    task_that_takes_more_than_50_millis().await;
+    // The Interval has missed a tick
+
+    // This resolves immediately because the deadline has passed.
+    interval.tick().await;
+
+    // With Delay behavior, the next tick is scheduled 50ms from the *previous*
+    // tick's completion, not from its originally scheduled time.
+    interval.tick().await;
+}
 ```

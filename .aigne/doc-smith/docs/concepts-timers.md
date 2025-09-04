@@ -1,22 +1,18 @@
 # Timers
 
-Tokio provides utilities for tracking time and scheduling work to be executed after a set period. These tools are essential for handling delays, periodic tasks, and operations with deadlines.
+Tokio provides utilities for tracking time and scheduling work to happen in the future. These tools are essential for handling timeouts, delays, and periodic tasks in asynchronous applications.
 
-All timer utilities must be used within the context of a Tokio [Runtime](./concepts-runtime.md), as they rely on its internal timer for scheduling.
+At a high level, the `tokio::time` module offers three main types of utilities:
 
-Tokio's primary time-related components are:
-
-- **`Sleep`**: A future that completes at a specific instant.
+- **`Sleep`**: A future that completes at a specific point in time.
 - **`Interval`**: A stream that yields values at a fixed period.
 - **`Timeout`**: A wrapper that limits the maximum execution time for a future.
 
-Let's explore each of these concepts.
+All timer utilities must be used from within the context of a Tokio [Runtime](./concepts-runtime.md), as they rely on its internal timer mechanism.
 
-## Sleep: Waiting for a Duration
+## Sleep: Pausing a Task
 
-The most basic timer primitive is `sleep`. It creates a future that completes after a specified duration has passed. This is the asynchronous equivalent of `std::thread::sleep`.
-
-`sleep` is useful when you need to pause a task for a fixed amount of time without blocking the entire thread.
+The most basic timer utility is `sleep`, which creates a future that completes after a specified duration has passed. It's the asynchronous equivalent of `std::thread::sleep`.
 
 ```rust
 use std::time::Duration;
@@ -29,110 +25,119 @@ async fn main() {
 }
 ```
 
-To wait until a specific moment in time, you can use `sleep_until(instant)`. If you drop the `Sleep` future before it completes, the timer is cancelled, and no additional cleanup is needed.
+No work is performed while the `sleep` future is being awaited. It simply parks the current task and allows the scheduler to run other tasks until the specified time has been reached.
 
-## Interval: Repeating on a Schedule
+For waiting until a specific moment, you can use `sleep_until(instant)`. The `Sleep` future returned by these functions can also be modified. For instance, you can `reset` it to a new deadline, which is useful in `select!` loops.
 
-While you could use `sleep` in a loop to perform a task periodically, this approach can lead to drift. The time it takes to execute the task itself is not accounted for, so the actual period will be `sleep_duration + task_duration`.
+```rust,no_run
+use tokio::time::{self, Duration, Instant};
 
-For more precise periodic tasks, Tokio provides `interval`. An `interval` measures time from the completion of the *last* tick, ensuring that ticks occur at a more consistent frequency.
+#[tokio::main]
+async fn main() {
+    let sleep = time::sleep(Duration::from_millis(10));
+    tokio::pin!(sleep);
 
-The diagram below illustrates the difference:
+    loop {
+        tokio::select! {
+            () = &mut sleep => {
+                println!("timer elapsed");
+                sleep.as_mut().reset(Instant::now() + Duration::from_millis(50));
+            },
+        }
+    }
+}
+```
+
+## Interval: Repeating an Operation
+
+An `Interval` is used to execute a task on a fixed schedule. It creates a stream that yields a value at a specified period.
+
+The key difference between using `interval` and `sleep` inside a loop is how they handle the time spent on other work. An `Interval` accounts for the time that has passed since the *last* tick. If the work between ticks takes longer than expected, the next `.tick().await` will complete sooner (or immediately) to catch up.
+
+This diagram illustrates the difference:
 
 ```d2
 direction: down
 
 "Loop with sleep(2s)": {
-  shape: package
-  grid-columns: 1
+  shape: sequence_diagram
 
-  "Timeline": {
-    shape: sequence_diagram
-    "Task": {shape: step}
-    "Sleep": {shape: step}
-
-    "0s" -> "Task": "Tick 1"
-    "Task" -> "Sleep": "Work (1s)"
-    "Sleep" -> "3s": "Sleep (2s)"
-    "3s": "Tick 2"
+  "Task": {
+    "Work (1s)": {lifespan: 1}
+    "sleep(2s)": {lifespan: 2}
+    "Work (1s) ": {lifespan: 1}
+    "sleep(2s) ": {lifespan: 2}
   }
-  "Total period becomes ~3 seconds."
+  
+  note over "Task": "Total cycle time: 3s"
 }
 
-"Interval(2s)": {
-  shape: package
-  grid-columns: 1
+"Loop with interval(2s)": {
+  shape: sequence_diagram
 
-  "Timeline": {
-    shape: sequence_diagram
-    "Task": {shape: step}
-    "Wait": {shape: step}
-
-    "0s" -> "Task": "Tick 1"
-    "Task" -> "Wait": "Work (1s)"
-    "Wait" -> "2s": "Wait (~1s)"
-    "2s": "Tick 2"
+  "Task": {
+    "Work (1s)": {lifespan: 1}
+    "tick() await (1s)": {lifespan: 1}
+    "Work (1s) ": {lifespan: 1}
+    "tick() await (1s) ": {lifespan: 1}
   }
-  "Total period remains 2 seconds."
+
+  note over "Task": "Total cycle time: 2s (as scheduled)"
 }
 ```
 
-Here is a practical example of using `interval` to run a task every two seconds, where the task itself takes one second:
+Here is a practical example:
 
 ```rust
 use tokio::time;
 
 async fn task_that_takes_a_second() {
-    println!("Executing task...");
+    println!("Performing a task...");
     time::sleep(time::Duration::from_secs(1)).await
 }
 
 #[tokio::main]
 async fn main() {
     let mut interval = time::interval(time::Duration::from_secs(2));
-    for _i in 0..3 {
+    for _i in 0..5 {
         interval.tick().await;
         task_that_takes_a_second().await;
     }
 }
 ```
-In this example, the message "Executing task..." will be printed at approximately t=0s, t=2s, and t=4s.
 
-### Handling Missed Ticks
+In this example, the task is executed approximately every two seconds, even though the task itself takes one second to run.
 
-If your task takes longer to execute than the interval's period, the interval is said to have "missed a tick." You can configure how `Interval` behaves in this scenario using `MissedTickBehavior`:
+### Missed Tick Behavior
 
-- **`Burst` (Default):** The interval will fire ticks as fast as possible until it catches up.
-- **`Delay`:** The next tick is scheduled relative to the current time, effectively resetting the interval's phase.
-- **`Skip`:** The interval skips the missed ticks and schedules the next tick at the next regular interval point.
+If a significant amount of time passes between calls to `.tick().await`, the `Interval` is said to have "missed" one or more ticks. The default behavior, `MissedTickBehavior::Burst`, is to fire ticks as quickly as possible until it has caught up. Other behaviors like `Delay` and `Skip` can be configured for more control over this scenario.
 
-## Timeout: Bounding Execution Time
+## Timeout: Setting a Deadline
 
-Often, you need to ensure an operation doesn't take too long to complete. The `timeout` function wraps a future and imposes a time limit on its execution.
+Often, you need to limit how long an asynchronous operation is allowed to run. The `timeout` function wraps a future and cancels it if it doesn't complete within a specified duration.
 
-If the inner future completes within the duration, `timeout` returns `Ok(value)`. If the duration elapses first, the inner future is cancelled, and `timeout` returns `Err(Elapsed)`.
+It returns a `Result`. If the future completes before the timeout, it returns `Ok` with the future's output. If the timeout elapses first, it returns `Err(Elapsed)`.
 
 ```rust
 use tokio::time::{timeout, Duration};
 
-async fn long_running_task() {
-    // This task takes longer than the timeout.
+async fn long_running_operation() {
+    // some work that might take too long
     sleep(Duration::from_secs(5)).await;
-    println!("Task finished!");
 }
 
 #[tokio::main]
 async fn main() {
-    let res = timeout(Duration::from_secs(1), long_running_task()).await;
+    let res = timeout(Duration::from_secs(1), long_running_operation()).await;
 
     if res.is_err() {
-        println!("The operation timed out!");
+        println!("Operation timed out!");
     }
 }
 ```
 
-This is useful for adding deadlines to I/O operations, such as network requests or database queries, to prevent your application from hanging indefinitely.
+It's important to note that the timeout is checked *before* polling the wrapped future. If the future runs a long, CPU-bound computation without yielding (i.e., without reaching an `.await`), it might run past the deadline without being canceled immediately.
 
 ---
 
-Tokio's time utilities—`sleep`, `interval`, and `timeout`—provide the essential tools for managing time-based logic in asynchronous applications. For a complete list of functions and detailed options, see the [Time API Reference](./api-time.md).
+These timer utilities are fundamental building blocks for creating reliable, time-sensitive applications. For more detailed information on their APIs, see the [`tokio::time` API reference](./api-time.md). The next section explores the [Tokio Runtime](./concepts-runtime.md) in more detail.

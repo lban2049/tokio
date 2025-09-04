@@ -1,245 +1,236 @@
 # 运行时
 
-Tokio 运行时是驱动异步应用程序的引擎。它提供了一些基本服务，如 I/O 事件循环、任务调度器、计时器以及用于阻塞操作的线程池。本节提供了用于手动配置运行时并与之交互的详细 API 文档。
+Tokio 运行时是驱动异步应用程序的引擎。它为执行任务、处理 I/O 和管理基于时间的事件提供了必要的服务。本节提供了用于手动配置运行时并与之交互的详细 API 参考。
 
-关于更高级别的概念性概述，请参阅我们的核心概念指南中的[运行时](./concepts-runtime.md)。
+若想在更高层次上理解运行时的角色及其组件，请参阅 [核心概念：运行时](./concepts-runtime.md) 指南。
 
-## 核心组件
+## Runtime
 
-一个 Tokio 运行时捆绑了几个协同工作的关键组件来执行异步任务。
-
-```d2
-direction: down
-
-"Tokio 运行时": {
-  shape: package
-  grid-columns: 2
-  grid-gap: 50
-
-  "任务调度器": {
-    shape: rectangle
-    "管理并执行异步任务。"
-  }
-
-  "I/O 驱动 (Reactor)": {
-    shape: rectangle
-    "与操作系统交互以实现非阻塞 I/O。"
-  }
-
-  "计时器": {
-    shape: rectangle
-    "提供 `sleep` 和 `interval` 等实用工具。"
-  }
-
-  "阻塞池": {
-    shape: rectangle
-    "用于阻塞操作的专用线程池。"
-  }
-}
-
-"你的异步代码": {
-  shape: rectangle
-}
-
-"你的异步代码" -> "Tokio 运行时": "派生任务并使用资源"
-
-"Tokio 运行时"."任务调度器" <-> "Tokio 运行时"."I/O 驱动 (Reactor)": "在 I/O 事件上唤醒任务"
-"Tokio 运行时"."任务调度器" <-> "Tokio 运行时"."计时器": "在超时时唤醒任务"
-"Tokio 运行时"."任务调度器" -> "Tokio 运行时"."阻塞池": "分流阻塞调用"
-
-```
-
-## 运行时
-
-`Runtime` 结构体是主要入口点。它封装了所有运行时服务。虽然许多应用程序可以依赖 `#[tokio::main]` 宏，但直接创建 `Runtime` 实例可以实现更精细的控制。
+`Runtime` 结构体是主入口点。它捆绑了 I/O 驱动、任务调度器、计时器以及用于阻塞操作的线程池。大多数应用程序可以使用 `#[tokio::main]` 属性，但你也可以为了更强的控制力而直接创建和管理 `Runtime` 实例。
 
 ### 创建运行时
 
-使用默认设置创建多线程运行时的最简单方法是使用 `Runtime::new()`。
+你可以使用 `Runtime::new()` 创建一个具有默认多线程配置的运行时。
 
 ```rust
 use tokio::runtime::Runtime;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // 使用默认配置创建一个新的运行时。
-    let rt = Runtime::new()?;
+// 使用默认设置创建一个新的运行时
+let rt = Runtime::new().unwrap();
 
-    // 使用运行时阻塞一个 future。
-    rt.block_on(async {
-        println!("你好，来自 Tokio 运行时！");
-    });
-
-    Ok(())
-}
+// 使用该运行时...
 ```
 
-### 核心方法
+对于更高级的配置，例如选择调度器或启用特定驱动，请使用 [`Builder`](#builder)。
 
-<x-cards>
-  <x-card data-title="block_on" data-icon="lucide:arrow-down-square">
-    在运行时上运行一个 future 直至完成，阻塞当前线程直到 future 解析。
-  </x-card>
-  <x-card data-title="spawn" data-icon="lucide:send">
-    派生一个在运行时上执行的新的异步任务。
-  </x-card>
-  <x-card data-title="spawn_blocking" data-icon="lucide:box">
-    在一个专用线程池上运行一个阻塞函数，防止它阻塞异步调度器。
-  </x-card>
-  <x-card data-title="handle" data-icon="lucide:grip">
-    返回一个运行时的 `Handle`，它可以被克隆并发送到其他线程。
-  </x-card>
-</x-cards>
+### 执行 Future
 
-### 关闭
-
-通过丢弃 `Runtime` 值来关闭运行时。`drop` 的实现将阻塞当前线程，直到所有已派生的工作都已停止。对于非阻塞关闭或带超时的关闭，你可以使用 `shutdown_background()` 或 `shutdown_timeout()`。
+在运行时上运行 future 的主要方法是 `block_on` 方法。该方法会接管当前线程，将给定的 future 运行至完成，并返回其结果。
 
 ```rust
 use tokio::runtime::Runtime;
-use tokio::task;
+
+// 创建运行时
+let rt = Runtime::new().unwrap();
+
+// 执行一个 future，阻塞当前线程直到其完成
+rt.block_on(async {
+    println!("Hello from the runtime!");
+});
+```
+
+### 派生任务
+
+在运行时的上下文中，你可以使用 `spawn` 来派生额外的异步任务以并发运行。这些任务将在运行时的线程池上执行。
+
+```rust
+use tokio::runtime::Runtime;
+
+// 创建运行时
+let rt = Runtime::new().unwrap();
+
+// 将一个 future 派生到运行时上
+rt.spawn(async {
+    println!("Now running on a worker thread.");
+});
+
+// 若要等待派生的任务，可以阻塞其 JoinHandle
+let handle = rt.spawn(async {
+    "Task finished"
+});
+
+let result = rt.block_on(handle).unwrap();
+println!("{}", result);
+```
+
+对于阻塞、CPU 密集型或其他长时间运行的同步操作，请使用 `spawn_blocking` 以避免调度器阻塞。
+
+```rust
+use tokio::runtime::Runtime;
 use std::thread;
 use std::time::Duration;
 
-fn main() {
-   let runtime = Runtime::new().unwrap();
+let rt = Runtime::new().unwrap();
 
-   runtime.block_on(async move {
-       task::spawn_blocking(move || {
-           // 模拟一个长时间运行的阻塞任务
-           thread::sleep(Duration::from_secs(10));
-       });
-   });
-
-   // 使用 100 毫秒超时关闭。阻塞任务将被泄漏。
-   runtime.shutdown_timeout(Duration::from_millis(100));
-}
+rt.spawn_blocking(|| {
+    println!("Running a blocking operation...");
+    thread::sleep(Duration::from_secs(1));
+    println!("Blocking operation complete.");
+});
 ```
 
-## 构建器
+### 关闭
 
-`Builder` 提供了一种灵活的方式来配置新的 `Runtime` 实例。你可以选择调度器类型、配置工作线程、启用/禁用驱动程序，以及设置生命周期钩子。
+丢弃 `Runtime` 实例会启动优雅关闭。它将等待所有已派生的任务完成。如果你需要控制关闭行为，可以使用 `shutdown_timeout` 或 `shutdown_background`。
 
-### 创建构建器
+- **`shutdown_timeout(duration)`**: 最多等待 `duration` 时间让任务停止。超时后，任何剩余的任务及其线程都将被泄露。
+- **`shutdown_background()`**: 启动关闭而不阻塞，允许从异步上下文中丢弃运行时。如果阻塞任务仍在运行，这可能会导致资源泄露。
 
-你可以开始为多线程调度器或当前线程调度器构建运行时。
+```rust
+use tokio::runtime::Runtime;
+use std::time::Duration;
 
--   `Builder::new_multi_thread()`: 为工作窃取多线程调度器创建一个构建器。这适用于大多数应用程序。
--   `Builder::new_current_thread()`: 为单线程调度器创建一个构建器，该调度器在当前线程上运行所有任务。
+let runtime = Runtime::new().unwrap();
 
-### 配置示例
+runtime.spawn(async {
+    // 一些长时间运行的任务
+    tokio::time::sleep(Duration::from_secs(10)).await;
+});
 
-这是一个创建自定义多线程运行时的示例。
+// 关闭，最多等待 100 毫秒让任务完成。
+runtime.shutdown_timeout(Duration::from_millis(100));
+```
+
+## Builder
+
+`Builder` 提供了一种在创建 `Runtime` 之前对其进行配置的方法。你可以选择调度器类型、设置工作线程数、启用 I/O 和时间驱动等。
+
+### 创建 Builder
+
+根据所需的调度器，创建 `Builder` 有两个主要入口点：
+
+- **`Builder::new_multi_thread()`**: 为工作窃取、多线程调度器创建一个构建器。这适用于大多数应用程序。
+- **`Builder::new_current_thread()`**: 为单线程调度器创建一个构建器，该调度器在当前线程上运行所有任务。
+
+### 配置
+
+以下是创建自定义多线程运行时的示例：
 
 ```rust
 use tokio::runtime::Builder;
 use std::time::Duration;
 
-fn main() {
-    let runtime = Builder::new_multi_thread()
-        .worker_threads(4) // 设置工作线程的数量
-        .thread_name("my-tokio-worker") // 为工作线程设置一个名称
-        .thread_stack_size(3 * 1024 * 1024) // 设置工作线程的堆栈大小
-        .enable_all() // 同时启用 I/O 和时间驱动程序
-        .build() // 构建运行时
-        .unwrap();
+let runtime = Builder::new_multi_thread()
+    .worker_threads(4) // 设置工作线程的数量
+    .thread_name("my-tokio-worker") // 为线程设置名称
+    .thread_stack_size(3 * 1024 * 1024) // 设置栈大小
+    .enable_all() // 同时启用 I/O 和时间驱动
+    .build()
+    .unwrap();
 
-    runtime.block_on(async {
-        println!("正在一个自定义配置的运行时上运行！");
-    });
-}
+runtime.block_on(async {
+    println!("Hello from a custom runtime!");
+});
 ```
 
-### 常用配置方法
+**常用配置方法：**
 
-| Method | Description |
+| 方法 | 描述 |
 |---|---|
-| `enable_all()` | 同时启用 I/O 和时间驱动程序。这是一个方便的简写。 |
-| `enable_io()` | 为网络、进程和信号启用 I/O 驱动程序。 |
-| `enable_time()` | 为 `sleep`、`interval` 和 `timeout` 等实用工具启用时间驱动程序。 |
+| `enable_all()` | 同时启用 I/O 和时间驱动。一个方便的简写。 |
+| `enable_io()` | 为网络、进程和信号启用 I/O 驱动。 |
+| `enable_time()` | 为 `tokio::time` 工具启用时间驱动。 |
 | `worker_threads(usize)` | 为多线程调度器设置工作线程的数量。 |
-| `max_blocking_threads(usize)` | 设置阻塞池中的最大线程数。 |
-| `thread_name(impl Into<String>)` | 为运行时派生的线程设置一个静态名称。 |
-| `thread_keep_alive(Duration)` | 为阻塞池中的线程设置自定义的保活超时时间。 |
-| `on_thread_start(F)` | 在每个工作线程启动后执行一个函数。 |
+| `max_blocking_threads(usize)` | 为阻塞池设置最大线程数。 |
+| `thread_name(String)` | 为派生的工作线程的名称设置前缀。 |
+| `thread_keep_alive(Duration)` | 为阻塞池线程设置空闲超时时间。 |
 
-## 句柄
+## Handle
 
-`Handle` 是一个可克隆、引用计数的 `Runtime` 句柄。它允许你从任何拥有句柄的线程与运行时进行交互（例如，派生任务），而无需引用 `Runtime` 实例本身。
+`Handle` 是对一个活动 `Runtime` 的轻量级、可克隆引用。它允许你从任何上下文（包括其他线程）与运行时进行交互，例如派生任务。
 
-### 获取句柄
+### 获取 Handle
 
-获取 `Handle` 主要有两种方式：
-
-1.  **从现有的 `Runtime` 中获取**：`runtime.handle()`
-2.  **从运行时上下文中获取**：`Handle::current()`
+- **`Runtime::handle()`**: 从现有的 `Runtime` 实例获取一个 Handle。
+- **`Handle::current()`**: 获取当前执行上下文的运行时的 Handle。如果在 Tokio 运行时上下文之外调用，此函数会 panic。
+- **`Handle::try_current()`**: `current()` 的一个非 panic 版本，它返回一个 `Result`。
 
 ```rust
 use tokio::runtime::{Handle, Runtime};
 
-fn main() {
-    let rt = Runtime::new().unwrap();
+let rt = Runtime::new().unwrap();
 
-    // 1. 从运行时实例获取一个句柄
-    let handle_from_rt = rt.handle().clone();
+// 从运行时实例获取一个 Handle
+let handle_from_rt = rt.handle();
 
-    rt.block_on(async {
-        // 2. 从当前运行时上下文获取一个句柄
-        let handle_from_context = Handle::current();
+rt.block_on(async {
+    // 从当前上下文获取一个 Handle
+    let handle_from_ctx = Handle::current();
+    
+    handle_from_ctx.spawn(async {
+        println!("Task spawned from a handle!");
+    });
+});
+```
 
-        handle_from_context.spawn(async {
-            println!("从句柄派生的任务！");
+### 使用 Handle
+
+`Handle` 可用于派生任务、运行阻塞 future 以及进入运行时上下文，即使从标准的 `std::thread` 中也可以。
+
+```rust
+use tokio::runtime::{Handle, Runtime};
+use std::thread;
+
+#[tokio::main]
+async fn main() {
+    let handle = Handle::current();
+
+    let std_thread = thread::spawn(move || {
+        // 使用 handle 从另一个线程在运行时上运行一个异步块
+        handle.block_on(async {
+            println!("Hello from another thread!");
         });
     });
+
+    std_thread.join().unwrap();
 }
 ```
 
-如果在 Tokio 运行时上下文之外调用 `Handle::current()`，它将会 panic。对于运行时可能不处于活动状态的情况，`Handle::try_current()` 会返回一个 `Result`。
+### 进入运行时上下文
 
-### 使用句柄
-
-`Handle` 提供了与 `Runtime` 类似的方法，用于派生任务和阻塞 future。
-
--   `handle.spawn(future)`: 在关联的运行时上派生一个任务。
--   `handle.spawn_blocking(f)`: 在运行时的阻塞池上派生一个阻塞任务。
--   `handle.block_on(future)`: 阻塞当前线程并运行一个 future 直至完成。请注意，在 `current_thread` 运行时上，此方法无法驱动 I/O 或计时器；只有 `Runtime::block_on` 可以。
--   `handle.enter()`: 进入运行时上下文，返回一个 `EnterGuard`。当需要在 `async` 块之外创建基于 I/O 或计时器的类型时，这是必需的。
+The `enter()` method on both `Runtime` and `Handle` returns an `EnterGuard`. While the guard is in scope, the current thread is considered to be within that runtime's context. This allows functions like `tokio::spawn` to work without needing an explicit `Handle`.
 
 ```rust
-use tokio::runtime::{Handle, Runtime};
-use tokio::task::JoinHandle;
-use tokio::time::{sleep, Duration};
+use tokio::runtime::Runtime;
 
-// 此函数需要一个运行时上下文来派生任务。
-fn function_that_spawns(msg: String) -> JoinHandle<()> {
-    tokio::spawn(async move {
-        println!("{}", msg);
-        sleep(Duration::from_millis(10)).await;
-    })
+fn function_that_spawns() {
+    // 如果不在运行时上下文中，这会 panic
+    tokio::spawn(async {
+        println!("Spawned without an explicit handle.");
+    });
 }
 
-fn main() {
-    let rt = Runtime::new().unwrap();
+let rt = Runtime::new().unwrap();
 
-    let s = "来自运行时上下文之外的问候！".to_string();
+// 进入运行时上下文
+let _guard = rt.enter();
 
-    // 进入运行时上下文以调用 `tokio::spawn`。
-    let _guard = rt.enter();
-    let handle = function_that_spawns(s);
-
-    // 在句柄上阻塞以等待任务完成。
-    rt.block_on(handle).unwrap();
-}
+// 现在我们可以调用隐式依赖于运行时上下文的函数了
+function_that_spawns();
 ```
 
-### RuntimeFlavor
+## RuntimeFlavor
 
-你可以通过 `handle.runtime_flavor()` 来确定运行时正在使用的调度器类型。
+Tokio 支持两种调度器类型。你可以使用 `runtime_flavor()` 方法来确定一个 `Handle` 关联的调度器类型，该方法会返回一个 `RuntimeFlavor` 枚举。
+
+- `RuntimeFlavor::CurrentThread`: 单线程调度器。
+- `RuntimeFlavor::MultiThread`: 多线程、工作窃取调度器。
 
 ```rust
 use tokio::runtime::{Handle, RuntimeFlavor};
 
-#[tokio::main(flavor = "current_thread")]
+#[tokio::main(flavor = "multi_thread")]
 async fn main() {
-  assert_eq!(RuntimeFlavor::CurrentThread, Handle::current().runtime_flavor());
+  assert_eq!(RuntimeFlavor::MultiThread, Handle::current().runtime_flavor());
 }
 ```

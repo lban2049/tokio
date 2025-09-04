@@ -1,56 +1,39 @@
 # Getting Started
 
-This guide will walk you through setting up a new project with Tokio and building a simple TCP echo server. By the end, you'll have a running asynchronous application.
+This guide will walk you through setting up a new project with Tokio and building a simple, asynchronous TCP echo server. By the end, you'll have a working application that can handle multiple concurrent connections.
 
-## 1. Create a New Project
+## 1. Add Tokio as a dependency
 
-First, let's create a new Rust project using Cargo.
+To begin, create a new Rust project and add Tokio to your dependencies. The easiest way to get started is to enable all features via the `full` feature flag in your `Cargo.toml` file. This ensures that all the APIs you might need are available as you build your application.
 
-```bash
-cargo new my-tokio-app
-cd my-tokio-app
-```
-
-## 2. Add Tokio as a Dependency
-
-Tokio is modular, with different features available behind feature flags. To get started easily, we'll enable all features using the `full` flag.
-
-Add the following line to your `Cargo.toml` file:
-
+**Cargo.toml**
 ```toml
-[dependencies]
 tokio = { version = "1", features = ["full"] }
 ```
 
-This ensures that all the APIs you might need while building your application are readily available.
+## 2. Write an asynchronous TCP echo server
 
-## 3. Write the Code
+Next, let's write the code for our server. This application will listen for incoming TCP connections on `127.0.0.1:8080`. For each connection, it will read data from the socket and write the same data back to the client.
 
-Now, let's write our TCP echo server. Open `src/main.rs` and replace its contents with the following code:
-
+**main.rs**
 ```rust,no_run
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Bind a listener to the address
     let listener = TcpListener::bind("127.0.0.1:8080").await?;
 
-    println!("Server listening on port 8080");
-
     loop {
-        // The second item contains the IP and port of the new connection.
         let (mut socket, _) = listener.accept().await?;
 
-        // Spawn a new task to handle each connection.
         tokio::spawn(async move {
             let mut buf = [0; 1024];
 
-            // In a loop, read data from the socket and write it back.
+            // In a loop, read data from the socket and write the data back.
             loop {
                 let n = match socket.read(&mut buf).await {
-                    // Socket closed
+                    // socket closed
                     Ok(0) => return,
                     Ok(n) => n,
                     Err(e) => {
@@ -59,7 +42,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 };
 
-                // Write the data back to the socket
+                // Write the data back
                 if let Err(e) = socket.write_all(&buf[0..n]).await {
                     eprintln!("failed to write to socket; err = {:?}", e);
                     return;
@@ -70,39 +53,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-Let's break down what's happening:
+## 3. Run the application
 
--   `#[tokio::main]`: This is a macro that transforms the `async fn main()` into a synchronous `main` function that initializes a Tokio runtime and executes the asynchronous code.
--   `TcpListener::bind("...").await?`: This line creates a TCP listener that binds to the specified address. The `.await` keyword is used because binding is an asynchronous operation.
--   `listener.accept().await?`: This asynchronously waits for a new incoming connection. When a connection is established, it returns a tuple containing a socket and the address of the peer.
--   `tokio::spawn(async move { ... })`: This creates a new asynchronous task. The connection is moved into this task and handled concurrently, allowing the main loop to continue accepting new connections without waiting for the previous one to finish.
--   `socket.read(&mut buf).await`: This reads data from the socket into a buffer. It returns the number of bytes read. If it returns `Ok(0)`, the connection has been closed by the client.
--   `socket.write_all(&buf[0..n]).await`: This writes the data from the buffer back to the socket, echoing it to the client.
+With the code in place, you can run the server using Cargo:
 
-## 4. Run the Application
-
-Now you can run the server:
-
-```bash
+```sh
 cargo run
 ```
 
-You should see the output `Server listening on port 8080`.
+To test the server, you can connect to it using a tool like `netcat` or `telnet`. Open a new terminal window and run:
 
-To test it, open a new terminal window and use a tool like `telnet` or `netcat` to connect to the server:
-
-```bash
+```sh
 telnet 127.0.0.1 8080
 ```
 
-Anything you type into the `telnet` session will be echoed back by the server. To close the connection, press `Ctrl+]` in `telnet` and type `quit`.
+Anything you type into the `telnet` session will be echoed back by the server.
+
+## 4. How it works
+
+Let's briefly break down what the code is doing:
+
+-   `#[tokio::main]`: This is a macro that transforms the `async fn main()` into a synchronous `main` function that initializes a Tokio runtime and executes the asynchronous code.
+-   `TcpListener::bind("127.0.0.1:8080").await?`: We create a `TcpListener` to listen for incoming connections. This is an asynchronous operation, so we use `.await` to wait for it to complete.
+-   `listener.accept().await?`: The `accept` method waits for a new connection. When a connection is established, it returns a new `TcpStream` (our `socket`) and the address of the peer. The `loop` ensures the server continues to accept new connections indefinitely.
+-   `tokio::spawn(async move { ... })`: For each incoming connection, we spawn a new asynchronous task. This allows the server to process multiple connections concurrently. The main task can immediately go back to accepting new connections while the spawned task handles its specific connection.
+-   `socket.read(&mut buf).await` and `socket.write_all(...).await`: These are the asynchronous I/O operations. They read data from the socket into a buffer and write the contents of the buffer back to the socket. The `.await` keyword pauses the task until the operation is complete without blocking the entire thread, allowing other tasks to run.
 
 ## Next Steps
 
-Congratulations! You've successfully built your first asynchronous application with Tokio. 
-
-To better understand the components you just used and the principles behind Tokio, it's a good idea to dive into the core concepts.
-
-<x-card data-title="Core Concepts" data-icon="lucide:book-open" data-href="/concepts" data-cta="Learn More">
-  Explore the fundamental concepts and components that make up the Tokio runtime, providing a solid foundation for advanced usage.
-</x-card>
+You've successfully built your first asynchronous application with Tokio! To gain a deeper understanding of the concepts you've just used, we recommend exploring the [Core Concepts](./concepts.md) documentation.
