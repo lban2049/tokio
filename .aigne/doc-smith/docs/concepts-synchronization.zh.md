@@ -1,69 +1,41 @@
 # 同步
 
-异步程序通常涉及多个独立运行的任务。为了协调这些任务并管理共享资源，Tokio 提供了一套同步原语。这些工具对于构建正确且高效的并发应用程序至关重要。
+异步程序本质上涉及多个独立运行的任务。为了构建健壮的应用程序，这些任务通常需要通信并同步它们的行为。Tokio 提供了一套全面的同步原语，用于安全高效地管理共享状态和协调任务间的工作。
 
-Tokio 的同步原语大致可分为两类：
+这些原语大致可分为两类：
 
-1.  **消息传递**：任务通过通道相互发送消息进行通信。这种方法避免了显式的共享状态，并且通常更易于理解。
-2.  **状态同步**：传统的同步原语（如互斥锁和信号量）被适配到了异步世界。它们用于控制对共享、可变数据的访问。
+1.  **消息传递（通道）：** 任务通过通道相互发送消息进行通信。这种方法避免了共享可变状态，从而可以简化并发代码并防止整类错误的发生。
+2.  **状态同步：** 对于需要共享状态的情况，Tokio 提供了标准同步原语（如互斥锁和信号量）的异步版本。这些工具控制对共享数据的访问，确保同一时间只有一个任务（或有限数量的任务）可以访问它。
 
-本模块中的所有同步原语都与运行时无关，可以与任何 Tokio 运行时甚至非 Tokio 运行时一起使用。在 Tokio 运行时中使用时，它们会参与协作式调度，以防止任务饥饿。
+## 使用通道进行消息传递
 
-## 消息传递
+Tokio 提供了多种类型的通道，每种都为不同的通信模式量身定制。选择合适的通道是构建高效且正确的应用程序的关键。
 
-消息传递是 Tokio 中一种常见的同步模式。它涉及独立任务通过通道发送消息。Tokio 提供了几种通道类型，每种类型都适用于不同的通信模式。
-
-```d2
-direction: down
-
-Channels: {
-  grid-columns: 2
-  grid-gap: 50
-
-  oneshot: "oneshot: 单一值" {
-    Producer -> Consumer: "send(value)"
-  }
-
-  mpsc: "mpsc: 多生产者，单消费者" {
-    Producer-1: {label: "生产者 1"}
-    Producer-2: {label: "生产者 2"}
-    Producer-N: {label: "..."}
-
-    Producer-1 -> Consumer
-    Producer-2 -> Consumer
-    Producer-N -> Consumer
-  }
-
-  broadcast: "broadcast: 多生产者，多消费者" {
-    Producer-1: {label: "生产者 1"}
-    Producer-2: {label: "生产者 2"}
-    Consumer-1: {label: "消费者 1"}
-    Consumer-2: {label: "消费者 2"}
-
-    Producer-1 -> Consumer-1
-    Producer-1 -> Consumer-2
-    Producer-2 -> Consumer-1
-    Producer-2 -> Consumer-2
-  }
-
-  watch: "watch: 状态分发" {
-    Producer -> Consumer-1: {label: "notify(latest_value)"}
-    Producer -> Consumer-2: {label: "notify(latest_value)"}
-    Consumer-1: {label: "消费者 1"}
-    Consumer-2: {label: "消费者 2"}
-  }
-}
-```
+<x-cards data-columns="2">
+  <x-card data-title="oneshot" data-icon="lucide:arrow-right-from-line">
+    一个单生产者、单消费者的通道，用于发送单个值，通常用于返回计算结果。
+  </x-card>
+  <x-card data-title="mpsc" data-icon="lucide:git-merge">
+    一个多生产者、单消费者的通道，用于从多个任务向单个工作任务发送多个值。
+  </x-card>
+  <x-card data-title="broadcast" data-icon="lucide:rss">
+    一个多生产者、多消费者的通道，其中每条消息都会被每个接收者看到。非常适合扇出模式。
+  </x-card>
+  <x-card data-title="watch" data-icon="lucide:eye">
+    一个多生产者、多消费者的通道，只存储最新的值。非常适合广播配置变更。
+  </x-card>
+</x-cards>
 
 ### Oneshot 通道
 
-`oneshot` 通道允许从一个生产者向一个消费者发送单个值。它通常用于将计算结果发送给等待中的任务。
+`oneshot` 通道专为从一个任务向另一个任务发送单个值而设计。它最常用于将计算结果发送回等待中的任务。
 
-```rust
+```rust icon=logos:rust
 use tokio::sync::oneshot;
 
 async fn some_computation() -> String {
-    "represents the result of the computation".to_string()
+    // ... perform some work ...
+    "result of the computation".to_string()
 }
 
 #[tokio::main]
@@ -75,50 +47,62 @@ async fn main() {
         tx.send(res).unwrap();
     });
 
-    // Do other work while the computation is happening in the background
+    // Do other work while the computation runs in the background
 
-    // Wait for the computation result
-    let res = rx.await.unwrap();
-    println!("Got = {}", res);
+    // Wait for the result
+    let result = rx.await.unwrap();
+    println!("Got result: {}", result);
 }
 ```
-如果一个任务在终止前产生一个结果，你可以直接使用它的 `JoinHandle` 而不是 `oneshot` 通道。
+
+如果一个任务的最终操作是产生一个值，通常可以直接使用其 `JoinHandle` 而不是 `oneshot` 通道，这样效率更高。
 
 ### MPSC 通道
 
-`mpsc`（多生产者，单消费者）通道允许多个生产者向单个消费者发送多个值。它通常用于向任务分发工作或从多个计算中收集结果。
+`mpsc`（多生产者，单消费者）通道允许多个任务向单个接收任务发送消息。这是将工作分发给专用工作任务或聚合来自多个来源结果的常见模式。
 
-创建 `mpsc` 通道时，必须指定其容量。该容量是可缓冲的最大消息数，这对于处理背压至关重要。
+创建 `mpsc` 通道时，必须指定一个容量，即可以缓冲的最大消息数。这个容量对于处理背压至关重要：如果通道已满，发送者将异步等待直到有空间，从而防止消费者不堪重负。
 
-```rust
+```rust icon=logos:rust
 use tokio::sync::mpsc;
 
-async fn some_computation(input: u32) -> String {
-    format!("the result of computation {}", input)
+async fn process_data(data: u32) {
+    println!("Processing {}", data);
 }
 
 #[tokio::main]
 async fn main() {
     let (tx, mut rx) = mpsc::channel(100);
 
+    // Spawn a worker task to process data
     tokio::spawn(async move {
-        for i in 0..10 {
-            let res = some_computation(i).await;
-            tx.send(res).await.unwrap();
+        while let Some(data) = rx.recv().await {
+            process_data(data).await;
         }
     });
 
-    while let Some(res) = rx.recv().await {
-        println!("got = {}", res);
+    // Send data from multiple producer tasks
+    for i in 0..10 {
+        let tx_clone = tx.clone();
+        tokio::spawn(async move {
+            tx_clone.send(i).await.unwrap();
+        });
     }
+
+    // Drop the original sender to allow the receiver to terminate
+    drop(tx);
+
+    // The program will exit once all data is processed.
 }
 ```
 
 ### Broadcast 通道
 
-`broadcast` 通道支持多生产者、多消费者的模式，其中每个消费者都会收到每个值。这对于“扇出”式模式（如发布/订阅系统）非常有用。
+`broadcast` 通道允许多个发送者向多个接收者广播消息。每个接收者都能看到在其订阅*之后*发送的每条消息。这对于发布/订阅系统、实时更新或聊天应用等需要将单个事件扇出给多个监听者的场景非常有用。
 
-```rust
+如果一个接收者速度太慢导致消息堆积，它将开始收到 `Lagged` 错误，表明它错过了一些消息。这可以防止单个慢速接收者阻塞整个系统。
+
+```rust icon=logos:rust
 use tokio::sync::broadcast;
 
 #[tokio::main]
@@ -143,99 +127,105 @@ async fn main() {
 
 ### Watch 通道
 
-`watch` 通道是一种多生产者、多消费者的通道，它只存储最近的一个值。当新值发送时，消费者会收到通知，但不能保证它们能看到每一个值。这非常适合广播配置更改或发出状态转换信号，例如关闭信号。
+`watch` 通道与 broadcast 通道类似，但有一个关键区别：它只保留最新的单个值。当新值发送时，接收者会收到通知，但不保证能看到每个中间值。这使得它在分发状态更新（例如配置变更）时非常高效，因为在这些场景中，只有最新版本才重要。
 
-```rust
+```rust icon=logos:rust
 use tokio::sync::watch;
 use tokio::time::{self, Duration};
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 struct Config {
-    timeout: Duration,
+    api_key: String,
 }
 
 #[tokio::main]
 async fn main() {
-    let config = Config { timeout: Duration::from_secs(1) };
-    let (tx, mut rx) = watch::channel(config.clone());
+    let initial_config = Config { api_key: "initial_key".to_string() };
+    let (tx, mut rx) = watch::channel(initial_config);
 
+    // A worker task that uses the configuration
     tokio::spawn(async move {
-        time::sleep(Duration::from_secs(2)).await;
-        let new_config = Config { timeout: Duration::from_secs(5) };
-        tx.send(new_config).unwrap();
+        loop {
+            // Wait for a change in configuration
+            if rx.changed().await.is_err() {
+                // Sender was dropped
+                break;
+            }
+            let config = rx.borrow().clone();
+            println!("Worker sees new config: {:?}", config);
+        }
     });
 
-    loop {
-        tokio::select! {
-            _ = rx.changed() => {
-                let new_timeout = rx.borrow().timeout;
-                println!("Configuration changed: new timeout is {:?}", new_timeout);
-                if new_timeout == Duration::from_secs(5) { break; }
-            }
-            _ = time::sleep(Duration::from_secs(1)) => {
-                println!("Still waiting for config change...");
-            }
-        }
-    }
+    // Simulate updating the configuration
+    time::sleep(Duration::from_millis(100)).await;
+    let new_config = Config { api_key: "updated_key".to_string() };
+    tx.send(new_config).unwrap();
+
+    time::sleep(Duration::from_millis(100)).await;
 }
 ```
 
 ## 状态同步
 
-为了直接管理共享状态，Tokio 提供了标准库中同步原语的异步版本。这些类型会异步等待，而不是阻塞线程。
+当任务需要直接访问和修改共享数据时，消息传递可能不是最佳选择。对于这些场景，Tokio 提供了传统同步原语的异步版本。
 
 <x-cards data-columns="2">
   <x-card data-title="Mutex" data-icon="lucide:lock">
-    提供互斥功能，确保一次只有一个任务可以访问数据。它保证了锁获取的先进先出（FIFO）顺序。
+    提供互斥访问，确保一次只有一个任务可以访问数据。它是公平的（FIFO）。
   </x-card>
-  <x-card data-title="RwLock" data-icon="lucide:book-open">
-    在任何时候允许多个读取者或一个写入者。它偏向写入者以防止写入者饥饿。
+  <x-card data-title="RwLock" data-icon="lucide:book-open-check">
+    一种读写锁，允许多个并发读取者或单个独占写入者。
   </x-card>
-  <x-card data-title="Semaphore" data-icon="lucide:traffic-cone">
-    限制可以访问资源的并发任务数量。它持有一组任务必须获取的许可。
+  <x-card data-title="Semaphore" data-icon="lucide:ticket">
+    通过管理一组许可来限制可以访问资源的并发任务数量。
   </x-card>
   <x-card data-title="Barrier" data-icon="lucide:git-commit-horizontal">
-    使多个任务能够相互等待，直到它们都达到某个点后才能一起继续执行。
+    允许多个任务等待，直到所有任务都达到某个执行点后再继续执行。
   </x-card>
   <x-card data-title="Notify" data-icon="lucide:bell-ring">
-    一个基础工具，用于通知单个等待中的任务恢复工作，而不发送任何数据。
+    一个基础原语，用于通知单个等待中的任务唤醒并继续其工作，不发送任何数据。
   </x-card>
 </x-cards>
 
 ### Mutex
 
-异步 `Mutex` 提供对数据的独占访问。与 `std::sync::Mutex` 不同，它的锁守卫可以跨 `.await` 点持有。它最适合用于保护 I/O 资源。对于内存中的数据，通常首选 `std::sync::Mutex`。
+`tokio::sync::Mutex` 提供对数据的互斥访问。与标准库中的对应物不同，锁定 Tokio `Mutex` 是一个异步操作。锁守卫可以在 `.await` 点之间持有，这对于管理共享的 I/O 资源（如数据库连接池）至关重要。
 
-```rust
+Tokio 的 `Mutex` 是公平的，意味着它会按照请求的顺序（先进先出）授予锁。
+
+```rust icon=logos:rust
 use tokio::sync::Mutex;
 use std::sync::Arc;
 
 #[tokio::main]
 async fn main() {
-    let data = Arc::new(Mutex::new(0));
+    let counter = Arc::new(Mutex::new(0));
     let mut handles = vec![];
 
     for _ in 0..10 {
-        let data_clone = Arc::clone(&data);
-        handles.push(tokio::spawn(async move {
-            let mut lock = data_clone.lock().await;
-            *lock += 1;
-        }));
+        let counter_clone = Arc::clone(&counter);
+        let handle = tokio::spawn(async move {
+            let mut num = counter_clone.lock().await;
+            *num += 1;
+        });
+        handles.push(handle);
     }
 
     for handle in handles {
         handle.await.unwrap();
     }
 
-    assert_eq!(*data.lock().await, 10);
+    assert_eq!(*counter.lock().await, 10);
 }
 ```
 
 ### RwLock
 
-`RwLock`（读写锁）允许在同一时间存在多个读取者或一个写入者。对于读取频繁但写入不频繁的数据，这可能比 `Mutex` 更高效。
+`RwLock`（读写锁）允许在任何给定时间有多个读取者或单个写入者访问数据。这对于读取频繁但写入不频繁的数据很有利，因为它比 `Mutex` 允许更高的并发性。
 
-```rust
+Tokio 的 `RwLock` 是写优先的，以防止写入者因连续的读取者流而饿死。
+
+```rust icon=logos:rust
 use tokio::sync::RwLock;
 
 #[tokio::main]
@@ -248,73 +238,80 @@ async fn main() {
         let r2 = lock.read().await;
         assert_eq!(*r1, 5);
         assert_eq!(*r2, 5);
-    } // read locks are dropped here
+    } // Read locks are dropped here
 
     // Only one writer lock can be held
     {
         let mut w = lock.write().await;
         *w += 1;
         assert_eq!(*w, 6);
-    } // write lock is dropped here
+    } // Write lock is dropped here
 }
 ```
 
 ### Semaphore
 
-`Semaphore` 用于限制对资源的并发访问量。它维护一组许可；任务必须先获取一个许可才能继续进行。
+`Semaphore` 维护一个许可计数。任务可以 `acquire` 一个许可来访问资源，并在完成后释放它。如果没有可用的许可，任务将等待直到有许可被释放。这是一个强大的工具，用于控制对有限资源池的访问，例如限制并发网络连接或文件句柄的数量。
 
-```rust
+```rust icon=logos:rust
 use tokio::sync::Semaphore;
+use std::sync::Arc;
 
 #[tokio::main]
 async fn main() {
-    let semaphore = Semaphore::new(3);
+    // Limit concurrency to 3 tasks
+    let semaphore = Arc::new(Semaphore::new(3));
+    let mut handles = vec![];
 
-    let _a_permit = semaphore.acquire().await.unwrap();
-    let _two_permits = semaphore.acquire_many(2).await.unwrap();
+    for i in 0..5 {
+        let semaphore_clone = Arc::clone(&semaphore);
+        let handle = tokio::spawn(async move {
+            let _permit = semaphore_clone.acquire().await.unwrap();
+            println!("Task {} is running", i);
+            // Simulating work
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        });
+        handles.push(handle);
+    }
 
-    assert_eq!(semaphore.available_permits(), 0);
-
-    // This would wait until a permit is released
-    // let _ = semaphore.acquire().await;
+    for handle in handles {
+        handle.await.unwrap();
+    }
 }
 ```
 
 ### Barrier
 
-`Barrier` 允许多个任务等待，直到所有任务都达到某个执行点后，才允许它们继续进行。
+`Barrier` 用于在一组任务执行到某个特定点时进行同步。当一个任务到达屏障时，它会调用 `.wait()` 并阻塞。一旦指定数量的任务都到达了屏障，它们将全部被解除阻塞并继续执行。每次通过屏障时，会有一个任务被指定为“领导者”。
 
-```rust
+```rust icon=logos:rust
 use tokio::sync::Barrier;
 use std::sync::Arc;
 
 #[tokio::main]
 async fn main() {
-    let mut handles = Vec::with_capacity(10);
     let barrier = Arc::new(Barrier::new(10));
+    let mut handles = vec![];
 
     for i in 0..10 {
-        let c = barrier.clone();
-        handles.push(tokio::spawn(async move {
-            println!("Task {} waiting at barrier", i);
-            let wait_result = c.wait().await;
-            println!("Task {} passed barrier", i);
-            wait_result
-        }));
+        let barrier_clone = Arc::clone(&barrier);
+        let handle = tokio::spawn(async move {
+            println!("Task {} waiting at barrier...", i);
+            let wait_result = barrier_clone.wait().await;
+            println!("Task {} passed barrier!", i);
+            if wait_result.is_leader() {
+                println!("Task {} was the leader.", i);
+            }
+        });
+        handles.push(handle);
     }
 
-    let mut num_leaders = 0;
     for handle in handles {
-        let wait_result = handle.await.unwrap();
-        if wait_result.is_leader() {
-            num_leaders += 1;
-        }
+        handle.await.unwrap();
     }
-
-    assert_eq!(num_leaders, 1);
 }
 ```
 
----
+借助这些强大的同步工具，您可以在 Tokio 中构建复杂、安全且高性能的多任务应用程序。要深入了解它们的 API，请参阅 [API 参考](./api-sync.md)。
 
-有了这些工具，你就可以安全高效地管理异步任务之间复杂的交互。有关详细的 API 信息，请参阅[同步原语 API 参考](./api-sync.md)。接下来，我们将在[计时器](./concepts-timers.md)部分探讨 Tokio 如何处理基于时间的操作。
+接下来，让我们探讨如何使用 [计时器](./concepts-timers.md) 处理基于时间的操作。

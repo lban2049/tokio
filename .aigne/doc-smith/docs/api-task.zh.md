@@ -1,101 +1,44 @@
 # 任务
 
-用于管理并发操作的异步绿色线程。
+用于管理并发操作的异步绿色线程。该模块提供了在 Tokio 运行时中生成、管理和同步异步任务的核心工具。
 
-## 概述
+任务是 Tokio 中执行的基本单元。它们是轻量级、非阻塞和协作调度的，使你能够高效地运行大量的并发操作。要深入了解任务背后的理论，请参阅[任务与调度概念指南](./concepts-tasks.md)。
 
-`_任务_` 是一个轻量级的非阻塞执行单元。任务类似于操作系统线程，但任务不是由操作系统调度器管理，而是由 Tokio 运行时管理。这种模式也被称为[绿色线程](https://en.wikipedia.org/wiki/Green_threads)。如果你熟悉 Go 的 goroutine、Kotlin 的协程或 Erlang 的进程，你可以将 Tokio 的任务视为类似的东西。
+本页为最常见的任务相关功能提供了 API 参考。
 
-关于任务的要点包括：
-
-*   **轻量级**：创建和切换任务的开销很低，因为它不需要操作系统上下文切换。
-*   **协作式调度**：任务会一直运行直到它们让出（yield）（例如，在 `.await` 点），从而允许 Tokio 调度器运行另一个任务。
-*   **非阻塞**：任务不应执行标准 I/O 等阻塞操作，因为这会阻塞整个工作线程。相反，Tokio 提供了用于处理阻塞代码的特定 API。
-
-```d2
-direction: down
-
-"你的应用程序代码" {
-  shape: cloud
-}
-
-"Tokio 运行时" {
-  shape: package
-
-  调度器 {
-    shape: hexagon
-    grid-columns: 2
-
-    "工作线程" {
-      label: "工作线程\n（用于异步任务）"
-      shape: package
-      
-      Task-1 {
-        label: "异步任务 1"
-        shape: rectangle
-      }
-      Task-2 {
-        label: "异步任务 2"
-        shape: rectangle
-      }
-      Task-N {
-        label: "..."
-        shape: rectangle
-      }
-    }
-    
-    "阻塞线程池" {
-      label: "阻塞线程池\n（用于同步代码）"
-      shape: package
-      
-      Blocking-Task-1 {
-        label: "阻塞操作 1"
-        shape: rectangle
-      }
-      Blocking-Task-M {
-        label: "..."
-        shape: rectangle
-      }
-    }
-  }
-}
-
-"你的应用程序代码" -> "Tokio 运行时".调度器."工作线程".Task-1: "tokio::spawn(async {...})"
-"你的应用程序代码" -> "Tokio 运行时".调度器."阻塞线程池".Blocking-Task-1: "tokio::spawn_blocking(|| {...})"
-
-"Tokio 运行时".调度器."工作线程".Task-1 -> "Tokio 运行时".调度器."工作线程".Task-2: "让出"
-```
-
-该模块提供了用于生成、取消和协调任务的 API。
-
----
-
-## 生成任务
-
-处理任务最常见的方式是生成它们以进行并发执行。
+### 核心函数
 
 <x-cards data-columns="2">
   <x-card data-title="spawn" data-icon="lucide:play-circle">
     生成一个新的异步任务以并发运行。
   </x-card>
-  <x-card data-title="spawn_local" data-icon="lucide:anchor">
-    在当前线程的 `LocalSet` 上生成一个 `!Send` future。
+  <x-card data-title="spawn_blocking" data-icon="lucide:loader-2">
+    在专用的线程池上运行阻塞函数，防止其阻塞异步运行时。
+  </x-card>
+  <x-card data-title="yield_now" data-icon="lucide:rotate-cw">
+    将执行权交还给调度器，允许其他任务运行。
+  </x-card>
+  <x-card data-title="JoinSet" data-icon="lucide:box-select">
+    用于管理一组动态生成的任务的集合。
   </x-card>
 </x-cards>
 
+## 生成任务
+
+创建新任务的主要方式是使用 `tokio::spawn` 函数。
+
 ### `spawn`
 
-生成一个新的异步任务，并为其返回一个 `JoinHandle`。提供的 future 将立即在后台开始运行。
+生成一个新的异步任务，并为其返回一个 `JoinHandle`。这相当于 `std::thread::spawn` 的异步版本。
 
-此函数必须在 Tokio 运行时的上下文中调用。生成的任务可能在当前线程上执行，也可能被发送到另一个线程。
+即使没有等待 `JoinHandle`，所提供的 future 也会立即在后台开始运行。根据运行时的配置，任务可能在当前线程上执行，也可能被移动到不同的工作线程。
 
-```rust
-use tokio::net::{TcpListener, TcpStream};
+```rust Spawning a task icon=logos:rust
+use tokio::net::TcpListener;
 use std::io;
 
-async fn process(socket: TcpStream) {
-    // ...
-#   drop(socket);
+async fn process_socket(socket: tokio::net::TcpStream) {
+    // ... 处理连接
 }
 
 #[tokio::main]
@@ -105,193 +48,232 @@ async fn main() -> io::Result<()> {
     loop {
         let (socket, _) = listener.accept().await?;
 
+        // 生成一个新任务以并发处理每个连接。
         tokio::spawn(async move {
-            // 并发处理每个套接字。
-            process(socket).await
+            process_socket(socket).await;
         });
     }
 }
 ```
 
-返回的 `JoinHandle` 是一个 future，可以对其进行 `await` 以获取任务的输出。如果任务发生 panic，`await` `JoinHandle` 将返回一个 `JoinError`。
+要运行多个任务并等待它们的结果，你可以存储它们的 `JoinHandle`。
 
-```rust
+```rust Waiting for multiple tasks icon=logos:rust
+# #[tokio::main(flavor = "current_thread")] async fn main() {
+async fn my_background_op(id: i32) -> String {
+    format!("Finished background task {}.", id)
+}
+
+let ops = vec![1, 2, 3];
+let mut tasks = Vec::with_capacity(ops.len());
+
+for op in ops {
+    tasks.push(tokio::spawn(my_background_op(op)));
+}
+
+let mut outputs = Vec::with_capacity(tasks.len());
+for task in tasks {
+    outputs.push(task.await.unwrap());
+}
+println!("{:?}", outputs);
+# }
+```
+
+**Panic**
+
+如果在 Tokio 运行时上下文之外调用此函数，将会引发 panic。
+
+## 处理阻塞操作
+
+异步任务不应执行阻塞操作，因为这会暂停整个工作线程，阻止其他任务取得进展。Tokio 提供了两个函数来安全地集成阻塞代码。
+
+### `spawn_blocking`
+
+在专用于阻塞任务的独立线程池上运行一个闭包。这是运行 CPU 密集型代码或同步 I/O 操作的首选方式。
+
+```rust Using spawn_blocking icon=logos:rust
 use tokio::task;
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let join_handle = task::spawn(async {
-        // ...
-        "hello world!"
-    });
+async fn compute_and_save() -> Result<(), Box<dyn std::error::Error>> {
+    let data_to_compute = "some complex data".to_string();
 
-    // 等待生成任务的结果。
-    let result = join_handle.await?;
-    assert_eq!(result, "hello world!");
+    let result = task::spawn_blocking(move || {
+        // 这在阻塞线程上运行。
+        // 执行计算密集型工作或同步 I/O。
+        let processed = data_to_compute.to_uppercase();
+        std::fs::write("output.txt", processed)
+    }).await?;
+
+    result?;
+    println!("Blocking operation complete.");
     Ok(())
 }
 ```
 
-**Panics**：如果在 Tokio 运行时之外调用此函数，则会发生 panic。
+使用 `spawn_blocking` 生成的任务不能被直接中止。如果运行时关闭，它将无限期地等待这些任务完成，除非配置了关闭超时。
 
-### `spawn_local`
+### `block_in_place`
 
-在当前的 `LocalSet` 上生成一个 `!Send` future。
+该函数将*当前*工作线程转换为阻塞线程，允许执行阻塞操作而不会拖慢运行时。它通过将当前线程上的其他任务移交给一个新的工作线程来实现这一点。这可能比 `spawn_blocking` 更高效，因为它避免了上下文切换，但它仅在多线程运行时中可用。
 
-这对于持有不能安全地跨线程发送的数据（例如 `Rc<T>`）的 future 是必需的。生成的 future 将始终在调用 `spawn_local` 的同一线程上运行。
-
-```rust
-use std::rc::Rc;
+```rust Using block_in_place icon=logos:rust
 use tokio::task;
 
-#[tokio::main]
-async fn main() {
-    let nonsend_data = Rc::new("my nonsend data...");
+# async fn docs() {
+let result = task::block_in_place(|| {
+    // 执行一些计算密集型工作或调用同步代码
+    "blocking completed"
+});
 
-    let local = task::LocalSet::new();
-
-    // 运行本地任务集。
-    local.run_until(async move {
-        let nonsend_data_clone = nonsend_data.clone();
-        task::spawn_local(async move {
-            println!("{}", nonsend_data_clone);
-            // ...
-        }).await.unwrap();
-    }).await;
-}
+assert_eq!(result, "blocking completed");
+# }
 ```
 
-**Panics**：如果在 `LocalSet` 之外调用此函数，则会发生 panic。
+**Panic**
 
----
+如果在 `current_thread` 运行时中调用此函数，将会引发 panic，因为没有其他工作线程可以分流任务。
 
-## 管理任务集合
+## 让步
 
-### `JoinSet`
+### `yield_now`
 
-`JoinSet<T>` 是一个任务集合，其中所有任务都具有相同的返回类型 `T`。它允许你生成多个任务，并按照它们完成的顺序等待它们完成。
+将执行权交还给 Tokio 调度器，允许其他待处理的任务运行。当前任务被放置在队列的末尾，并将在稍后恢复。
 
-当 `JoinSet` 被丢弃时，集合中所有仍在运行的任务都将被中止。
+```rust Yielding execution icon=logos:rust
+use tokio::task;
 
-```rust
+# #[tokio::main] async fn main() {
+async {
+    task::spawn(async {
+        println!("spawned task done!")
+    });
+
+    // 让步，允许新生成的任务先执行。
+    task::yield_now().await;
+    println!("main task done!");
+}
+# .await;
+# }
+```
+
+## 任务集合
+
+### `JoinSet<T>`
+
+一个用于管理一组已生成任务的集合。它允许你按完成顺序等待任务，这在不需要一次性等待所有任务或任务持续时间不同的情况下非常有用。
+
+当 `JoinSet` 被丢弃时，集合中所有剩余的任务都将被中止。
+
+```rust Managing tasks with JoinSet icon=logos:rust
 use tokio::task::JoinSet;
+use std::time::Duration;
 
 #[tokio::main]
 async fn main() {
     let mut set = JoinSet::new();
 
-    for i in 0..10 {
-        set.spawn(async move { i });
+    for i in 0..5 {
+        set.spawn(async move {
+            tokio::time::sleep(Duration::from_millis(100 * i)).await;
+            i
+        });
     }
 
-    let mut seen = [false; 10];
     while let Some(res) = set.join_next().await {
-        let idx = res.unwrap();
-        seen[idx] = true;
-    }
-
-    for i in 0..10 {
-        assert!(seen[i]);
+        let completed_task_index = res.unwrap();
+        println!("Task {} completed!", completed_task_index);
     }
 }
 ```
 
-`JoinSet` 提供了 `spawn`、`spawn_blocking`、`join_next`、`abort_all` 和 `shutdown` 等方法，用于管理集合内任务的生命周期。
+## `!Send` Future
 
----
+标准的 `tokio::spawn` 要求 future 是 `Send` 的，这意味着它们可以安全地在线程之间移动。对于 `!Send` 的 future（例如，持有 `Rc<T>` 的 future），你必须使用 `LocalSet`。
 
-## 处理阻塞代码
+### `LocalSet` 和 `spawn_local`
 
-异步任务不应执行阻塞操作，因为这会阻止同一线程上的其他任务运行。Tokio 提供了两个 API，用于在异步上下文中安全地运行阻塞代码。
+`LocalSet` 在当前线程上执行任务。在 `LocalSet` 上下文中使用 `spawn_local` 生成的任何任务都保证会保留在该线程上，从而可以安全地使用 `!Send` 类型。
 
-### `spawn_blocking`
-
-在专用于阻塞操作的线程池上运行阻塞闭包。这是运行 CPU 密集型代码或同步 I/O 的首选方法。
-
-```rust
-use tokio::task;
-
-async fn docs() -> Result<(), Box<dyn std::error::Error>>{
-    let mut v = "Hello, ".to_string();
-    let res = task::spawn_blocking(move || {
-        // 这是计算密集型工作的替代品
-        v.push_str("world");
-        v
-    }).await?;
-
-    assert_eq!(res.as_str(), "Hello, world");
-    Ok(())
-}
-```
-
-### `block_in_place`
-
-此函数在多线程运行时上可用，它将当前工作线程转换为阻塞线程。它会将当前线程上的其他任务移动到另一个工作线程，这可以通过避免上下文切换来提高性能。
-
-```rust
-use tokio::task;
-
-async fn docs() {
-    let result = task::block_in_place(|| {
-        // 执行一些计算密集型工作或调用同步代码
-        "blocking completed"
-    });
-
-    assert_eq!(result, "blocking completed");
-}
-```
-
----
-
-## 协作式让出
-
-### `yield_now`
-
-将执行权交还给 Tokio 调度器，允许其他任务运行。当前任务被放置在待处理队列的末尾，并将在稍后再次被轮询。
-
-```rust
-use tokio::task;
-
-async fn example() {
-    task::spawn(async {
-        println!("spawned task done!")
-    });
-
-    // 让出，允许新生成的任务先执行。
-    task::yield_now().await;
-    println!("main task done!");
-}
-```
-
----
-
-## 任务取消
-
-生成的任务可以使用其 `JoinHandle` 或 `AbortHandle` 上的 `abort` 方法来取消。取消是一个信号，请求任务在其下一个 `.await` 点关闭。
-
--   `JoinHandle::abort()`：安排任务以进行取消。
--   中止后等待 `JoinHandle` 将会失败，并返回一个 `JoinError::is_cancelled` 错误。
--   中止并不能保证立即终止。任务会一直运行到其下一个让出点。
--   使用 `spawn_blocking` 生成的任务一旦开始运行就无法中止。
-
-```rust
+```rust Spawning a !Send future icon=logos:rust
+use std::rc::Rc;
 use tokio::task;
 
 #[tokio::main]
 async fn main() {
-    let handle = task::spawn(async {
-        // 一个长时间运行的任务
-        tokio::time::sleep(std::time::Duration::from_secs(10)).await;
-    });
+    // Rc 是 !Send
+    let nonsend_data = Rc::new("my local data");
 
-    // 取消任务
-    handle.abort();
+    let local_set = task::LocalSet::new();
 
-    // 现在等待句柄将返回一个已取消的错误。
-    let result = handle.await;
-    assert!(result.is_err());
-    assert!(result.unwrap_err().is_cancelled());
+    // 运行 LocalSet
+    local_set.run_until(async move {
+        let nonsend_data_clone = nonsend_data.clone();
+
+        // spawn_local 可以接受 !Send future。
+        let handle = task::spawn_local(async move {
+            println!("{}", nonsend_data_clone);
+            42
+        });
+
+        let result = handle.await.unwrap();
+        assert_eq!(result, 42);
+    }).await;
 }
 ```
 
-现在你已经了解了如何管理任务，你可能想学习如何协调它们。有关更多信息，请参阅[同步原语](./api-sync.md)文档。
+如果在 `LocalSet` 上下文之外调用 `spawn_local`，将会引发 panic。
+
+## 任务句柄与取消
+
+### `JoinHandle<T>`
+
+由 `spawn` 和 `spawn_local` 返回，`JoinHandle` 是一个 future，它会解析为关联任务的输出。等待该句柄将会等待任务完成。
+
+如果任务发生 panic，等待其 `JoinHandle` 将返回一个 `JoinError`。
+
+```rust Handling a panicked task icon=logos:rust
+use tokio::task;
+
+# #[tokio::main] async fn main() {
+let join = task::spawn(async {
+    panic!("something bad happened!")
+});
+
+// 返回的结果表明任务失败了。
+assert!(join.await.is_err());
+# }
+```
+
+#### 取消
+
+你可以通过在其 `JoinHandle` 上调用 `abort()` 方法来取消任务。这会向任务发出信号，使其在下一次到达 `.await` 点时关闭。要等待取消完成，你仍然必须 `.await` 该句柄。
+
+```rust Aborting a task icon=logos:rust
+use tokio::task;
+use std::time::Duration;
+
+# #[tokio::main] async fn main() {
+let handle = task::spawn(async {
+    // 除非被中止，否则此任务将永远运行。
+    loop {
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        println!("task is running...");
+    }
+});
+
+tokio::time::sleep(Duration::from_millis(50)).await;
+handle.abort();
+
+let join_result = handle.await;
+assert!(join_result.is_err());
+assert!(join_result.unwrap_err().is_cancelled());
+# }
+```
+
+### `AbortHandle`
+
+`AbortHandle` 提供了中止任务的能力，而无需等待其结果。一个任务可以有多个 `AbortHandle`，但只能有一个 `JoinHandle`。这对于将任务管理与任务完成的关注点分离非常有用。
+
+---
+
+以上涵盖了 Tokio 中任务管理的核心 API。有关运行时如何调度和执行这些任务的详细信息，请参阅[运行时 API 参考](./api-runtime.md)。

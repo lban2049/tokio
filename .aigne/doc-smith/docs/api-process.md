@@ -1,16 +1,14 @@
 # Processes
 
-This module provides an implementation of asynchronous process management for Tokio. It features a `Command` struct that mirrors the interface of the standard library's `std::process::Command`, but provides asynchronous versions of functions that create processes.
+This module provides an implementation of asynchronous process management for Tokio. It offers a `Command` struct that mirrors the interface of the standard library's [`std::process::Command`](https://doc.rust-lang.org/std/process/Command.html), but provides asynchronous versions of functions that create and manage child processes.
 
-These functions (`spawn`, `status`, `output`, and their variants) return future-aware types that integrate with the Tokio runtime. This asynchronous support is handled through signal handling on Unix and system APIs on Windows.
+These functions (`spawn`, `status`, `output`, and their variants) return future-aware types that integrate seamlessly with the Tokio runtime. This asynchronous support is handled through signal handling on Unix and specialized system APIs on Windows.
 
-## Quick Start
+## Quick Start: Spawning a Process
 
-### Spawning a process and waiting for it to complete
+The most common use case is to spawn a command, execute it, and wait for it to complete. The interface is designed to be very similar to the standard library.
 
-The basic usage is very similar to the standard library. The main difference is that operations like waiting for the child to exit are `async`.
-
-```rust,no_run
+```rust Spawning a simple command icon=logos:rust
 use tokio::process::Command;
 
 #[tokio::main]
@@ -22,27 +20,56 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .spawn()
         .expect("failed to spawn");
 
-    // Await until the command completes
+    // Await the child process to complete
     let status = child.wait().await?;
     println!("the command exited with: {}", status);
     Ok(())
 }
 ```
 
-### Capturing output
+## The `Command` Struct
 
-To spawn a process and capture all of its output, you can use the `output` method, which returns a future resolving to the process's `Output`.
+The `Command` struct is the primary builder for configuring and executing new child processes asynchronously.
 
-```rust,no_run
+### Creating and Configuring a Command
+
+You start by creating a new `Command` and then use its builder methods to configure the process before execution.
+
+| Method | Description |
+| --- | --- |
+| `new(program)` | Constructs a new `Command` to launch the specified program. |
+| `arg(arg)` | Adds a single argument to pass to the program. |
+| `args(args)` | Adds multiple arguments to pass to the program. |
+| `env(key, val)` | Sets an environment variable for the child process. |
+| `envs(vars)` | Adds or updates multiple environment variables. |
+| `env_remove(key)` | Removes an environment variable. |
+| `env_clear()` | Clears all environment variables for the child process. |
+| `current_dir(dir)` | Sets the working directory for the child process. |
+| `stdin(cfg)` | Configures the standard input (stdin) handle. |
+| `stdout(cfg)` | Configures the standard output (stdout) handle. |
+| `stderr(cfg)` | Configures the standard error (stderr) handle. |
+
+### Executing a Command
+
+Once configured, you can execute the command in several ways:
+
+*   **`spawn()`**: Executes the command as a child process, returning a handle to it immediately. This is the most flexible method, giving you a `Child` object to manage.
+
+*   **`status()`**: Executes the command and waits for it to finish, returning only its `ExitStatus`. This is a convenient shorthand for when you don't need to interact with the child's I/O.
+
+*   **`output()`**: Executes the command, waits for it to complete, and collects all of its standard output and standard error. This is useful for capturing the full output of a command.
+
+```rust Capturing output icon=logos:rust
 use tokio::process::Command;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Use `output` which returns a future instead of
-    // immediately returning the `Child`.
-    let output = Command::new("echo").arg("hello").arg("world")
-                        .output()
-                        .await?;
+    // Use `output()` which returns a future that resolves to the process's output
+    let output = Command::new("echo")
+        .arg("hello")
+        .arg("world")
+        .output()
+        .await?;
 
     assert!(output.status.success());
     assert_eq!(output.stdout, b"hello world\n");
@@ -50,24 +77,56 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-## Key Structs
+## The `Child` Struct
 
-| Struct | Description |
-|---|---|
-| `Command` | A builder for configuring and spawning new child processes asynchronously. |
-| `Child` | Represents a running child process, providing access to its I/O streams and allowing you to wait for it to complete. |
-| `ChildStdin` | A handle to a child process's standard input (stdin), implementing `AsyncWrite`. |
-| `ChildStdout` | A handle to a child process's standard output (stdout), implementing `AsyncRead`. |
-| `ChildStderr` | A handle to a child process's standard error (stderr), implementing `AsyncRead`. |
+When you `spawn` a process, you get a `Child` struct. This struct represents the running child process and provides methods to interact with it.
 
-## Advanced Usage
+### Waiting for a Child
 
-### Reading from Stdout
+The most fundamental operation is waiting for the process to exit. The `Child` struct itself can be `.await`ed, which is equivalent to calling the `wait()` method.
 
-You can pipe the child's standard output and read from it asynchronously, for example, line-by-line.
+*   **`wait()`**: Asynchronously waits for the child to exit completely, returning its `ExitStatus`.
+*   **`try_wait()`**: Attempts to collect the exit status without blocking. It returns `Ok(Some(status))` if the child has exited, `Ok(None)` if it's still running, and `Err` on error.
+*   **`wait_with_output()`**: A future that waits for the child to exit and collects all remaining output on its stdout and stderr handles.
 
-```rust,no_run
-use tokio::io::{BufReader, AsyncBufReadExt};
+### Terminating a Child
+
+You can forcefully terminate a child process if needed.
+
+*   **`start_kill()`**: Sends a kill signal to the child but does not wait for it to exit.
+*   **`kill()`**: Sends a kill signal and then asynchronously waits for the process to be fully terminated.
+
+```rust Killing a child process icon=logos:rust
+use tokio::process::Command;
+use tokio::time::{sleep, Duration};
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let mut child = Command::new("sleep").arg("5").spawn()?;
+
+    // Give it a moment to start
+    sleep(Duration::from_millis(100)).await;
+
+    println!("Killing the child process");
+    child.kill().await?;
+
+    let status = child.wait().await?;
+    println!("Child exited with: {}", status);
+
+    Ok(())
+}
+```
+
+## Working with I/O
+
+Tokio's process management shines when you need to interact with the child's standard input, output, and error streams. To do this, you must configure the corresponding handle to be `Stdio::piped()`.
+
+### Reading from a Child's `stdout`
+
+Once a child is spawned with a piped stdout, you can get an asynchronous reader from `child.stdout`.
+
+```rust Reading stdout line by line icon=logos:rust
+use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 use std::process::Stdio;
 
@@ -75,7 +134,7 @@ use std::process::Stdio;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut cmd = Command::new("cat");
 
-    // Specify that we want the command's standard output piped back to us.
+    // Pipe the command's standard output back to us.
     cmd.stdout(Stdio::piped());
 
     let mut child = cmd.spawn()
@@ -86,8 +145,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut reader = BufReader::new(stdout).lines();
 
-    // Ensure the child process is spawned in the runtime so it can
-    // make progress on its own while we await for any output.
+    // Ensure the child process is spawned in the runtime to make progress.
     tokio::spawn(async move {
         let status = child.wait().await
             .expect("child process encountered an error");
@@ -102,11 +160,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-### Writing to Stdin
+### Writing to a Child's `stdin`
 
-Similarly, you can pipe to a child's standard input and write to it asynchronously.
+Similarly, you can write to a child's standard input asynchronously if it's configured as a pipe.
 
-```rust,no_run
+```rust Writing to stdin and reading from stdout icon=logos:rust
 use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 use std::process::Stdio;
@@ -115,36 +173,34 @@ use std::process::Stdio;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut cmd = Command::new("sort");
 
-    // Pipe both stdout and stdin.
+    // Pipe both stdout and stdin
     cmd.stdout(Stdio::piped());
     cmd.stdin(Stdio::piped());
 
     let mut child = cmd.spawn().expect("failed to spawn command");
 
-    let mut stdin = child.stdin.take()
-        .expect("child did not have a handle to stdin");
+    let mut stdin = child.stdin.take().expect("child did not have a handle to stdin");
 
-    // Write data to the child process in a separate task to avoid deadlocks.
+    // Write data to the child process's stdin in a separate task
     tokio::spawn(async move {
         stdin.write_all(b"dog\nbird\nfrog\ncat\nfish\n").await.unwrap();
-        // Dropping stdin signals EOF.
+        // Dropping stdin signals EOF to the child
     });
 
     let output = child.wait_with_output().await?;
 
-    // Results should come back in sorted order
+    // The output should be sorted
     assert_eq!(output.stdout, b"bird\ncat\ndog\nfish\nfrog\n");
 
     Ok(())
 }
 ```
-Note: The behavior of some programs, like `sort`, is to buffer all input before writing any output. In general, it is recommended to write to the child in a separate task from awaiting its exit or output to avoid deadlocks.
 
 ### Piping Between Processes
 
-You can pipe the output of one command into the input of another.
+You can also pipe the output of one command directly into the input of another.
 
-```rust,no_run
+```rust Piping between two commands icon=logos:rust
 use tokio::join;
 use tokio::process::Command;
 use std::process::Stdio;
@@ -157,12 +213,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .spawn()
         .expect("failed to spawn echo");
 
-    let tr_stdin: Stdio = echo
-        .stdout
-        .take()
-        .unwrap()
-        .try_into()
-        .expect("failed to convert to Stdio");
+    // Take the stdout of the first command
+    let echo_stdout = echo.stdout.take().unwrap();
+
+    // Create the stdin for the second command from the first's stdout
+    let tr_stdin: Stdio = echo_stdout.try_into().expect("failed to convert to Stdio");
 
     let tr = Command::new("tr")
         .arg("a-z")
@@ -172,13 +227,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .spawn()
         .expect("failed to spawn tr");
 
+    // Wait for both processes to complete
     let (echo_result, tr_output) = join!(echo.wait(), tr.wait_with_output());
 
     assert!(echo_result.unwrap().success());
 
     let tr_output = tr_output.expect("failed to await tr");
     assert!(tr_output.status.success());
-
     assert_eq!(tr_output.stdout, b"HELLO WORLD!\n");
 
     Ok(())
@@ -189,12 +244,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ### Dropping and Cancellation
 
-A spawned process will, by default, continue to execute even after its `Child` handle has been dropped. This behavior is similar to the standard library and differs from the common futures paradigm where dropping implies cancellation.
+Unlike most futures, dropping a `Child` handle does **not** automatically terminate the process. The child process will continue to run in the background. If you want the child to be killed when the handle is dropped, you must configure this behavior using the `kill_on_drop` method on the `Command` builder.
 
-To change this, you can use the `Command::kill_on_drop(true)` method. This will cause the child process to be killed if the `Child` handle is dropped before the process has exited.
+```rust
+let mut child = Command::new("sleep")
+    .arg("1000")
+    .kill_on_drop(true) // Kill the process if the Child handle is dropped
+    .spawn()
+    .unwrap();
 
-### Unix Processes and Zombies
+// When `child` goes out of scope here, a kill signal will be sent.
+```
 
-On Unix platforms, a parent process must "reap" its child after it has exited to release all OS resources. A child process that has exited but has not been reaped is a "zombie" process. An accumulation of zombie processes can prevent new processes from being spawned.
+### Zombie Processes on Unix
 
-The Tokio runtime attempts to reap any process it spawns on a best-effort basis. However, for stricter cleanup guarantees, it is recommended to avoid dropping a `Child` handle and instead explicitly await its completion with `.wait().await`.
+On Unix-like systems, a process that has exited but has not yet been waited on by its parent becomes a "zombie". These processes consume system resources. The Tokio runtime will attempt to reap zombie processes it has spawned on a best-effort basis. However, for guaranteed cleanup, it is highly recommended to always explicitly wait for the `Child` to complete using `.await` or `wait()`.

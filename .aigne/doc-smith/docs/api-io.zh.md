@@ -1,20 +1,35 @@
 # I/O
 
-用于异步 I/O 功能的 trait、辅助函数和类型定义。该模块是 `std::io` 的异步版本。
+用于异步 I/O 功能的 Trait、辅助函数和类型定义。此模块是 `std::io` 的异步版本。
 
-该模块提供了标准库中 `Read`、`Write`、`BufRead` 和 `Seek` trait 的异步等效项。它还包含了用于处理这些 trait、处理标准 I/O 流和操作 I/O 对象的实用工具。
+Tokio 的 I/O 模型围绕几个核心 Trait 构建：`AsyncRead` 和 `AsyncWrite`。这些是标准库中 `Read` 和 `Write` Trait 的异步版本。关键区别在于它们的方法不会阻塞当前线程。它们不会阻塞，而是返回 `Poll::Pending`，并安排在 I/O 操作可以继续时唤醒当前任务。
 
-## 核心概念
+## 核心 Trait
 
-Tokio I/O 系统的基本组件是 `AsyncRead` 和 `AsyncWrite` trait。这些 trait 为异步读写字节提供了最通用的接口。
+这些 Trait 构成了 Tokio 中所有异步 I/O 操作的基础。
 
-与标准库中的对应项不同，当 I/O 未就绪时，这些 trait 上的方法将让出控制权给 Tokio 调度器，而不是阻塞当前线程。这使得应用程序在等待 I/O 操作完成时，可以运行其他任务。
+<x-cards>
+  <x-card data-title="AsyncRead" data-icon="lucide:book-open">
+    提供核心 `poll_read` 方法，用于从源异步读取字节。大多数用户将通过 `AsyncReadExt` 提供的便捷方法与此 Trait 交互。
+  </x-card>
+  <x-card data-title="AsyncWrite" data-icon="lucide:edit-3">
+    提供向目标异步写入字节的核心方法，包括 `poll_write`、`poll_flush` 和 `poll_shutdown`。`AsyncWriteExt` Trait 提供了更易用的写入方法。
+  </x-card>
+  <x-card data-title="AsyncBufRead" data-icon="lucide:file-text">
+    `std::io::BufRead` 的异步版本，用于从缓冲源读取字节。它提供 `poll_fill_buf` 等方法，并由 `AsyncBufReadExt` Trait 补充，以提供 `read_line` 等辅助函数。
+  </x-card>
+  <x-card data-title="AsyncSeek" data-icon="lucide:move-horizontal">
+    `std::io::Seek` 的异步版本，用于在字节流中移动光标。它使用一个两步过程：`start_seek` 和 `poll_complete`。
+  </x-card>
+</x-cards>
 
-大多数方便的 I/O 操作实用方法并不在核心 trait 本身上。相反，它们由扩展 trait `AsyncReadExt`、`AsyncWriteExt`、`AsyncBufReadExt` 和 `AsyncSeekExt` 提供，这些扩展 trait 会为所有实现相应基础 trait 的类型自动实现。
+### 读写数据
 
-例如，异步读取文件与同步版本非常相似：
+虽然核心 Trait 提供了低级别的轮询方法，但您通常会使用 `AsyncReadExt` 和 `AsyncWriteExt` 扩展 Trait 上的辅助方法。对于任何实现了 `AsyncRead` 或 `AsyncWrite` 的类型，这些 Trait 都会自动可用。
 
-```rust
+例如，您可以使用 `AsyncReadExt` 中的 `read` 方法从文件中读取数据：
+
+```rust Reading from a file icon=logos:rust
 use tokio::io::{self, AsyncReadExt};
 use tokio::fs::File;
 
@@ -23,7 +38,7 @@ async fn main() -> io::Result<()> {
     let mut f = File::open("foo.txt").await?;
     let mut buffer = [0; 10];
 
-    // read up to 10 bytes
+    // 最多读取 10 个字节
     let n = f.read(&mut buffer).await?;
 
     println!("The bytes: {:?}", &buffer[..n]);
@@ -31,55 +46,33 @@ async fn main() -> io::Result<()> {
 }
 ```
 
-## 核心 I/O Trait
-
-Tokio 的 I/O 系统围绕几个核心 trait 构建，这些 trait 定义了异步字节流的行为。
-
-<x-cards>
-  <x-card data-title="AsyncRead" data-icon="lucide:arrow-down-circle">
-    提供了 `poll_read` 方法，用于从源异步读取字节。当数据不可用时，它会注册当前任务，以便在源再次变为可读时被唤醒。
-  </x-card>
-  <x-card data-title="AsyncWrite" data-icon="lucide:arrow-up-circle">
-    提供了 `poll_write`、`poll_flush` 和 `poll_shutdown` 方法，用于向目标异步写入字节、刷新内部缓冲区以及优雅地关闭连接。
-  </x-card>
-  <x-card data-title="AsyncBufRead" data-icon="lucide:book-open">
-    `std::io::BufRead` 的异步版本。它允许从内部缓冲区读取，这可以减少系统调用的次数并提高性能。
-  </x-card>
-  <x-card data-title="AsyncSeek" data-icon="lucide:move-horizontal">
-    `std::io::Seek` 的异步版本。它提供了在字节流中更改当前位置的方法。
-  </x-card>
-</x-cards>
-
 ## 缓冲读取器和写入器
 
-由于频繁的系统调用，直接使用基于字节的接口可能效率低下。为了解决这个问题，Tokio 提供了类似于 `std::io` 的缓冲 I/O 类型。
+为了提高效率和便利性，Tokio 提供了类似于 `std::io` 的缓冲 I/O 类型。这些包装器可以减少系统调用的次数，并为常见任务提供了有用的方法。
 
--   **`BufReader`**：包装一个 `AsyncRead` 以提供缓冲读取。它通过 `AsyncBufReadExt` trait 引入了诸如 `read_line` 之类的有用方法。
--   **`BufWriter`**：包装一个 `AsyncWrite` 以缓冲写入操作。在 `BufWriter` 被丢弃之前，对其调用 `flush()` 很重要，以确保所有缓冲数据都已写入底层写入器。
+`BufReader` 为任何异步读取器添加缓冲功能，并与 `AsyncBufReadExt` 结合使用，可以启用 `read_line` 等方法。
 
-### 从文件读取行
-
-```rust
+```rust Reading a line with BufReader icon=logos:rust
 use tokio::io::{self, BufReader, AsyncBufReadExt};
 use tokio::fs::File;
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
     let f = File::open("foo.txt").await?;
-    let mut reader = BufReader::new(f);
-    let mut buffer = String::new();
+    let reader = BufReader::new(f);
+    let mut lines = reader.lines();
+    
+    while let Some(line) = lines.next_line().await? {
+        println!("{}", line);
+    }
 
-    // read a line into buffer
-    reader.read_line(&mut buffer).await?;
-
-    println!("{}", buffer);
     Ok(())
 }
 ```
 
-### 缓冲写入
+`BufWriter` 缓冲对任何异步写入器的写入操作。调用 `flush` 至关重要，以确保所有缓冲数据都已写入底层的写入器。
 
-```rust
+```rust Using BufWriter icon=logos:rust
 use tokio::io::{self, BufWriter, AsyncWriteExt};
 use tokio::fs::File;
 
@@ -89,52 +82,55 @@ async fn main() -> io::Result<()> {
     {
         let mut writer = BufWriter::new(f);
 
-        // Write a byte to the buffer.
-        writer.write_all(&[42u8]).await?;
+        // 向缓冲区写入一些字节。
+        writer.write_all(b"some bytes").await?;
 
-        // Flush the buffer to ensure data is written to the file.
+        // 刷新缓冲区以确保数据被写入。
         writer.flush().await?;
 
-    } // The buffer is discarded on drop unless flushed.
+    } // 缓冲区在 drop 时会再次刷新，但最好显式调用。
 
     Ok(())
 }
 ```
 
-## 标准 I/O
+## 工具
 
-Tokio 为标准输入、输出和错误流提供了异步 API。这些函数返回实现了 `AsyncRead` 和 `AsyncWrite` 的句柄。
+此模块还包括几个用于处理 I/O 流的工具。
 
--   `stdin()`：返回当前进程标准输入的句柄。
--   `stdout()`：返回当前进程标准输出的句柄。
--   `stderr()`：返回当前进程标准错误的句柄。
-
-**注意：** 这些 API 必须在 Tokio 运行时上下文中调用。
-
-## 实用工具
-
-该模块包含几个用于常见 I/O 任务的实用函数和结构体。
-
-<x-cards>
-  <x-card data-title="split()" data-icon="lucide:git-pull-request-arrow">
-    将一个同时实现了 `AsyncRead` 和 `AsyncWrite` 的值拆分为独立的可读 (`ReadHalf`) 和可写 (`WriteHalf`) 句柄。
+<x-cards data-columns="3">
+  <x-card data-title="split" data-icon="lucide:split">
+    将一个同时实现了 `AsyncRead` 和 `AsyncWrite` 的值拆分为一个独立的读取器部分（`ReadHalf`）和一个写入器部分（`WriteHalf`）。
   </x-card>
-  <x-card data-title="join()" data-icon="lucide:git-merge">
-    将一个读取器和一个写入器合并为一个同时实现了 `AsyncRead` 和 `AsyncWrite` 的句柄。
+  <x-card data-title="join" data-icon="lucide:merge">
+    `split` 的逆操作。将一个 `AsyncRead` 和一个 `AsyncWrite` 值合并为一个同时实现这两个 Trait 的句柄。
   </x-card>
-  <x-card data-title="copy()" data-icon="lucide:copy">
-    异步地将读取器的全部内容复制到写入器中。
-  </x-card>
-  <x-card data-title="empty()", "sink()", "repeat()" data-icon="lucide:box">
-    提供专用的 I/O 对象：`empty()` 是一个始终处于 EOF 的读取器，`sink()` 是一个无限接受并丢弃数据的写入器，而 `repeat()` 是一个无限产生特定字节的读取器。
+  <x-card data-title="Standard I/O" data-icon="lucide:terminal">
+    `stdin`、`stdout` 和 `stderr` 函数提供对进程标准 I/O 流的异步句柄。这些函数必须在 Tokio 运行时内调用。
   </x-card>
 </x-cards>
 
 ## `std` 重导出
 
-为方便起见，`std::io` 中的几个常用类型被重导出。这使你可以使用 `tokio::io` 而无需为这些类型单独导入 `std::io`。
+为方便起见，以下常见类型从 `std::io` 重导出：
 
--   `Error`
--   `ErrorKind`
--   `Result`
--   `SeekFrom`
+*   `Error`
+*   `ErrorKind`
+*   `Result`
+*   `SeekFrom`
+
+---
+
+在介绍了基本的 I/O Trait 之后，可以探索不同用例的具体实现：
+
+<x-cards>
+  <x-card data-title="Networking" data-icon="lucide:network" data-href="/api/net">
+    用于异步 TCP、UDP 和 Unix 套接字。
+  </x-card>
+  <x-card data-title="Filesystem" data-icon="lucide:folder" data-href="/api/fs">
+    用于异步文件和文件系统操作。
+  </x-card>
+  <x-card data-title="Processes" data-icon="lucide:cpu" data-href="/api/process">
+    用于与子进程 I/O 流交互。
+  </x-card>
+</x-cards>

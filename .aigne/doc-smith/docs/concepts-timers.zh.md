@@ -1,129 +1,87 @@
 # 计时器
 
-Tokio 提供了用于跟踪时间和调度未来工作的实用工具。这些工具对于在异步应用程序中处理超时、延迟和周期性任务至关重要。
+Tokio 提供了用于跟踪时间和调度工作在特定时间段后执行的实用工具。这些工具对于处理异步应用程序中的超时、延迟和周期性任务至关重要。主要的时间相关组件有：
 
-总体而言，`tokio::time` 模块提供了三种主要类型的实用工具：
+*   **Sleep**: 在特定时间点完成的 future。
+*   **Interval**: 以固定周期产生值的流。
+*   **Timeout**: 限制 future 最大执行时间的包装器。
 
-- **`Sleep`**：一个在特定时间点完成的 future。
-- **`Interval`**：一个按固定周期产生值的流。
-- **`Timeout`**：一个限制 future 最大执行时间的包装器。
+所有计时器实用工具都需要在 Tokio [Runtime](./concepts-runtime.md) 的上下文中使用，该运行时提供了必要的计时器实现。
 
-所有计时器实用工具都必须在 Tokio [运行时](./concepts-runtime.md) 的上下文中使用，因为它们依赖于其内部的计时器机制。
+## 休眠：暂停任务
 
-## Sleep：暂停任务
+引入延迟的最简单方法是使用 `tokio::time::sleep`。此函数返回一个在指定持续时间过后完成的 future。它是 `std::thread::sleep` 的异步等效版本。
 
-最基本的计时器实用工具是 `sleep`，它会创建一个在指定持续时间过后完成的 future。它相当于 `std::thread::sleep` 的异步版本。
+在等待 `Sleep` future 期间，不会执行任何工作。这使得其他任务可以并发运行。
 
-```rust
+```rust main.rs icon=logos:rust
 use std::time::Duration;
 use tokio::time::sleep;
 
 #[tokio::main]
 async fn main() {
+    println!("Waiting...");
     sleep(Duration::from_millis(100)).await;
     println!("100 ms have elapsed");
 }
 ```
 
-在等待 `sleep` future 期间，不会执行任何工作。它只是暂停当前任务，并允许调度器运行其他任务，直到达到指定的时间。
+如果需要等待到某个特定时刻，可以使用 `sleep_until(deadline)`，其中 `deadline` 是一个 `Instant`。
 
-如果要等待到某个特定时刻，可以使用 `sleep_until(instant)`。这些函数返回的 `Sleep` future 也可以被修改。例如，可以将其 `reset` 到一个新的截止时间，这在 `select!` 循环中非常有用。
+**取消**：取消休眠操作很简单，只需丢弃 `Sleep` future 即可。无需额外的清理工作。
 
-```rust,no_run
-use tokio::time::{self, Duration, Instant};
+**Panics**: 在 Tokio 运行时之外使用 `sleep` 会导致 panic。这是因为该函数需要访问运行时的计时器驱动程序。请确保它在由 Tokio 管理的 `async` 块内调用，例如通过 `#[tokio::main]` 或 `runtime.block_on()`。
 
-#[tokio::main]
-async fn main() {
-    let sleep = time::sleep(Duration::from_millis(10));
-    tokio::pin!(sleep);
+## 间隔：重复操作
 
-    loop {
-        tokio::select! {
-            () = &mut sleep => {
-                println!("timer elapsed");
-                sleep.as_mut().reset(Instant::now() + Duration::from_millis(50));
-            },
-        }
-    }
-}
-```
+对于需要按计划重复运行的任务，Tokio 提供了 `tokio::time::interval`。一个 interval 以指定周期产生 tick。与在循环中调用 `sleep` 的关键区别在于，`Interval` 会将任务本身所花费的时间计算在内，从而确保 tick 以更规则的频率发生。
 
-## Interval：重复操作
+如果在循环中使用 `sleep`，每次迭代的总时间将是休眠时长*加上*任务执行时间。而使用 `interval`，即使任务需要一些时间来执行，tick 之间的时间也保持一致。
 
-`Interval` 用于按固定计划执行任务。它会创建一个按指定周期产生值的流。
-
-在循环中使用 `interval` 和 `sleep` 的关键区别在于它们处理其他工作所花费时间的方式。`Interval` 会考虑自*上一个* tick 以来经过的时间。如果两个 tick 之间的工作耗时超出预期，下一个 `.tick().await` 将会更快（或立即）完成以追赶进度。
-
-下图说明了这种差异：
-
-```d2
-direction: down
-
-"使用 sleep(2s) 的循环": {
-  shape: sequence_diagram
-
-  "任务": {
-    "工作 (1s)": {lifespan: 1}
-    "sleep(2s)": {lifespan: 2}
-    "工作 (1s) ": {lifespan: 1}
-    "sleep(2s) ": {lifespan: 2}
-  }
-  
-  note over "任务": "总周期时间：3s"
-}
-
-"使用 interval(2s) 的循环": {
-  shape: sequence_diagram
-
-  "任务": {
-    "工作 (1s)": {lifespan: 1}
-    "tick() await (1s)": {lifespan: 1}
-    "工作 (1s) ": {lifespan: 1}
-    "tick() await (1s) ": {lifespan: 1}
-  }
-
-  note over "任务": "总周期时间：2s（按计划）"
-}
-```
-
-下面是一个实际的例子：
-
-```rust
+```rust main.rs icon=logos:rust
 use tokio::time;
 
 async fn task_that_takes_a_second() {
-    println!("Performing a task...");
-    time::sleep(time::Duration::from_secs(1)).await
+    println!("Executing task...");
+    time::sleep(time::Duration::from_secs(1)).await;
 }
 
 #[tokio::main]
 async fn main() {
     let mut interval = time::interval(time::Duration::from_secs(2));
+    // The first tick completes immediately.
     for _i in 0..5 {
         interval.tick().await;
         task_that_takes_a_second().await;
     }
 }
 ```
+在上面的示例中，循环大约每两秒运行一次。如果使用 `sleep` 而不是 `interval.tick()`，它将每三秒（2 秒休眠 + 1 秒任务）运行一次。
 
-在此示例中，即使任务本身需要一秒钟才能运行，它也大约每两秒执行一次。
+### 错过 Tick 的行为
 
-### Missed Tick 行为
+如果 `tick().await` 调用之间的代码执行时间超过了 interval 周期，可能会“错过”一个或多个 tick。你可以使用 `set_missed_tick_behavior()` 并通过以下策略之一来配置 interval 如何处理这种情况：
 
-如果在两次调用 `.tick().await` 之间经过了大量时间，`Interval` 就被认为“错过”了一个或多个 tick。默认行为 `MissedTickBehavior::Burst` 会尽快触发 tick 直到赶上进度。可以配置其他行为，如 `Delay` 和 `Skip`，以便更好地控制这种情况。
+*   `Burst` (默认): interval 将尽快触发 tick，以追赶上它本应达到的进度。
+*   `Delay`: 从当前时刻开始调度下一个 tick，这实际上重置了 interval 的相位。
+*   `Skip`: interval 会跳过错过的 tick，并等待下一个常规调度的 tick。
 
-## Timeout：设置截止时间
+## 超时：设置截止时间
 
-通常，需要限制一个异步操作的允许运行时长。`timeout` 函数会包装一个 future，如果它未在指定时间内完成，则会取消该 future。
+为防止 future 无限期运行，可以将其包装在 `tokio::time::timeout` 中。该函数接受一个持续时间和 一个 future，并返回一个解析为 `Result` 的新 future。
 
-该函数返回一个 `Result`。如果 future 在超时前完成，它会返回包含 future 输出的 `Ok`。如果先超时，它会返回 `Err(Elapsed)`。
+*   如果内部 future 在持续时间结束前完成，新的 future 将解析为 `Ok(value)`。
+*   如果在内部 future 完成前持续时间已过，新的 future 将解析为 `Err(Elapsed)`，并且内部 future 会被取消。
 
-```rust
+这对于构建健壮的网络应用程序至关重要，因为远程服务可能会变得无响应。
+
+```rust main.rs icon=logos:rust
 use tokio::time::{timeout, Duration};
 
 async fn long_running_operation() {
-    // some work that might take too long
-    sleep(Duration::from_secs(5)).await;
+    // This operation might take a long time.
+    tokio::time::sleep(Duration::from_secs(5)).await;
+    println!("Operation complete!");
 }
 
 #[tokio::main]
@@ -136,8 +94,6 @@ async fn main() {
 }
 ```
 
-值得注意的是，超时检查发生在轮询被包装的 future *之前*。如果 future 运行一个耗时较长的、受 CPU 限制的计算而没有让出（即没有到达 `.await`），它可能会超过截止时间而不会被立即取消。
-
 ---
 
-这些计时器实用工具是创建可靠、时间敏感应用程序的基础构建块。有关其 API 的更多详细信息，请参阅 [`tokio::time` API 参考文档](./api-time.md)。下一节将更详细地探讨 [Tokio 运行时](./concepts-runtime.md)。
+现在你对如何在 Tokio 中管理基于时间的操作有了概念性的理解。有关完整的函数列表和详细的配置选项，请参阅 [Time API 参考](./api-time.md)。

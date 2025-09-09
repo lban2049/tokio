@@ -1,24 +1,30 @@
 # Getting Started
 
-This guide will walk you through setting up a new project with Tokio and building a simple, asynchronous TCP echo server. By the end, you'll have a working application that can handle multiple concurrent connections.
+This guide will walk you through setting up your first Tokio application. We'll start by creating a new Rust project, adding Tokio as a dependency, and then building a simple TCP echo server that sends back any data it receives.
 
-## 1. Add Tokio as a dependency
+### Setting up the Project
 
-To begin, create a new Rust project and add Tokio to your dependencies. The easiest way to get started is to enable all features via the `full` feature flag in your `Cargo.toml` file. This ensures that all the APIs you might need are available as you build your application.
+First, let's create a new Rust project using Cargo:
 
-**Cargo.toml**
-```toml
+```bash Create a new project icon=lucide:terminal
+cargo new my-tokio-app
+cd my-tokio-app
+```
+
+Next, add the `tokio` crate as a dependency in your `Cargo.toml` file. We'll enable all features using the `full` feature flag. This is the easiest way to get started and ensures all the APIs you'll need are available.
+
+```toml Cargo.toml icon=lucide:file-text
+[dependencies]
 tokio = { version = "1", features = ["full"] }
 ```
 
-## 2. Write an asynchronous TCP echo server
+### Writing the Echo Server
 
-Next, let's write the code for our server. This application will listen for incoming TCP connections on `127.0.0.1:8080`. For each connection, it will read data from the socket and write the same data back to the client.
+Now, replace the contents of your `main.rs` file with the following code. This program will set up a server that listens on `127.0.0.1:8080`, and for each incoming connection, it will read data and write the same data back to the client.
 
-**main.rs**
-```rust,no_run
-use tokio::net::TcpListener;
+```rust main.rs icon=logos:rust
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpListener;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -53,32 +59,38 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-## 3. Run the application
+Let's break down what's happening here:
 
-With the code in place, you can run the server using Cargo:
+-   `#[tokio::main]`: This is a macro that transforms the `async fn main()` into a synchronous `main()` function that initializes a Tokio runtime and executes the asynchronous code.
+-   `TcpListener::bind("127.0.0.1:8080").await?`: We create a TCP listener bound to the specified address. The `.await` keyword is used because binding is an asynchronous operation.
+-   `loop { ... }`: The server enters a loop to continuously accept new connections.
+-   `listener.accept().await?`: This asynchronously waits for a new inbound connection. When one is established, it returns a tuple containing the socket and the address of the peer.
+-   `tokio::spawn(async move { ... });`: For each connection, a new task is spawned. This allows the server to handle multiple connections concurrently. The `move` keyword transfers ownership of the `socket` to the new task.
+-   `socket.read(&mut buf).await`: Inside the task, we read data from the socket into a buffer. This is another asynchronous operation, so we `.await` it.
+-   `socket.write_all(&buf[0..n]).await`: We write the data we just read back to the socket, effectively "echoing" it.
 
-```sh
+### Running the Server
+
+With the code in place, you can run the server from your terminal:
+
+```bash Run the application icon=lucide:terminal
 cargo run
 ```
 
-To test the server, you can connect to it using a tool like `netcat` or `telnet`. Open a new terminal window and run:
+The server is now running. To test it, open a new terminal window and use a tool like `netcat` or `telnet` to connect to it.
 
-```sh
-telnet 127.0.0.1 8080
+```bash Test with netcat icon=lucide:terminal
+nc 127.0.0.1 8080
 ```
 
-Anything you type into the `telnet` session will be echoed back by the server.
+Once connected, type any message, press Enter, and you should see the same message echoed back to you. To stop the server, go back to the first terminal and press `Ctrl+C`.
 
-## 4. How it works
+Congratulations! You've just built your first asynchronous application with Tokio.
 
-Let's briefly break down what the code is doing:
+### Next Steps
 
--   `#[tokio::main]`: This is a macro that transforms the `async fn main()` into a synchronous `main` function that initializes a Tokio runtime and executes the asynchronous code.
--   `TcpListener::bind("127.0.0.1:8080").await?`: We create a `TcpListener` to listen for incoming connections. This is an asynchronous operation, so we use `.await` to wait for it to complete.
--   `listener.accept().await?`: The `accept` method waits for a new connection. When a connection is established, it returns a new `TcpStream` (our `socket`) and the address of the peer. The `loop` ensures the server continues to accept new connections indefinitely.
--   `tokio::spawn(async move { ... })`: For each incoming connection, we spawn a new asynchronous task. This allows the server to process multiple connections concurrently. The main task can immediately go back to accepting new connections while the spawned task handles its specific connection.
--   `socket.read(&mut buf).await` and `socket.write_all(...).await`: These are the asynchronous I/O operations. They read data from the socket into a buffer and write the contents of the buffer back to the socket. The `.await` keyword pauses the task until the operation is complete without blocking the entire thread, allowing other tasks to run.
+Now that you have a basic application running, you're ready to learn more about the fundamental building blocks of Tokio.
 
-## Next Steps
-
-You've successfully built your first asynchronous application with Tokio! To gain a deeper understanding of the concepts you've just used, we recommend exploring the [Core Concepts](./concepts.md) documentation.
+<x-card data-title="Core Concepts" data-icon="lucide:puzzle" data-href="/concepts" data-cta="Explore Concepts">
+Dive deeper into tasks, I/O, state management, and the runtime itself to understand how Tokio works under the hood.
+</x-card>

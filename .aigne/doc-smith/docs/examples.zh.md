@@ -1,25 +1,20 @@
 # 示例
 
-本节提供了一系列可运行的示例，以帮助你了解如何使用 Tokio 的各种功能。这些示例旨在以最少的设置即可复制和运行。如需更全面的示例集，你可以浏览 [GitHub 上的 Tokio 仓库](https://github.com/tokio-rs/tokio/tree/master/examples)。
+本节提供了一系列可运行的代码示例，以演示 Tokio 的各种功能和用例。这些示例旨在做到实用，并易于在您自己的项目中进行调整。
 
 ## TCP 回声服务器
 
-这是一个基本的 TCP 回声服务器，它监听传入的连接，并将其接收到的任何数据发回。这是一个经典的示例，用于演示异步 I/O 和任务管理。
+一个经典的联网示例：一个简单的 TCP 服务器，它接受传入的连接，并回显其接收到的任何数据。该示例演示了 Tokio 的核心概念，如异步 I/O 和任务生成。
 
-### 设置
+首先，请确保您的 `Cargo.toml` 文件中包含了具有必要功能的 Tokio：
 
-首先，将必要的依赖项添加到你的 `Cargo.toml` 文件中。`full` 功能标志启用了所有公共的 Tokio API，这对于入门非常方便。
-
-```toml
-[dependencies]
+```toml Cargo.toml icon=mdi:file-document-outline
 tokio = { version = "1", features = ["full"] }
 ```
 
-### 代码
+以下是完整的服务器实现：
 
-现在，你可以在你的 `main.rs` 文件中使用以下代码：
-
-```rust,no_run
+```rust TCP Echo Server icon=logos:rust
 use tokio::net::TcpListener;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -33,7 +28,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tokio::spawn(async move {
             let mut buf = [0; 1024];
 
-            // 在循环中，从套接字读取数据并将其写回。
+            // 在一个循环中，从套接字读取数据并将数据写回。
             loop {
                 let n = match socket.read(&mut buf).await {
                     // 套接字已关闭
@@ -56,43 +51,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-此代码在 8080 端口上设置一个监听器。对于每个传入的连接，它会生成一个新的异步任务来处理通信。该任务将数据读入缓冲区，并将其写回到同一个套接字，直到连接关闭。
-
-## 处理阻塞操作
-
-异步任务不应直接执行阻塞操作，因为这会停止同一线程上其他任务的进展。对于阻塞或 CPU 密集型工作，请使用 `spawn_blocking` 函数将工作移至专用的线程池。
-
-```rust,no_run
-#[tokio::main]
-async fn main() {
-    // 这在核心线程上运行。
-
-    let blocking_task = tokio::task::spawn_blocking(|| {
-        // 这在阻塞线程上运行。
-        // 在这里阻塞是可以的。
-        // 例如，计算密集型任务或同步文件读取。
-        "done"
-    });
-
-    // 我们可以像这样等待阻塞任务：
-    // 如果阻塞任务发生 panic，下面的 unwrap 将传播该
-    // panic。
-    let result = blocking_task.await.unwrap();
-    println!("Blocking task finished with result: {}", result);
-}
-```
-
-`spawn_blocking` 函数接受一个闭包，并在 Tokio 运行时管理的独立线程池上执行它。这可以防止主异步调度程序被阻塞。对返回的 `JoinHandle` 进行 `await` 操作，允许异步任务等待阻塞操作完成而不会暂停线程。
-
 ## 进一步探索
 
-对于更高级和真实世界的用例，以下资源提供了丰富的示例。
+对于更复杂和多样化的用例，Tokio 项目提供了额外的资源。
 
-<x-cards data-columns="2">
-  <x-card data-title="官方 Tokio 示例" data-icon="lucide:github" data-href="https://github.com/tokio-rs/tokio/tree/master/examples" data-cta="View on GitHub">
-    官方 Tokio 仓库中的综合示例集合，涵盖了各种模块和功能。
+<x-cards>
+  <x-card data-title="Mini-Redis 项目" data-icon="lucide:database" data-href="https://github.com/tokio-rs/mini-redis/" data-cta="在 GitHub 上查看">
+    要查看一个更大、更“真实”的示例，请探索 mini-redis 仓库。这是一个使用 Tokio 构建的、尚未完成的异步 Redis 客户端和服务器，它展示了各种组件在大型应用中如何协同工作。
   </x-card>
-  <x-card data-title="Mini-Redis" data-icon="lucide:database" data-href="https://github.com/tokio-rs/mini-redis" data-cta="View on GitHub">
-    一个更大、更“真实世界”的客户端-服务器应用程序示例，该应用使用 Tokio 构建，展示了更复杂的应用程序结构。
+  <x-card data-title="官方示例目录" data-icon="lucide:folder-git-2" data-href="https://github.com/tokio-rs/tokio/tree/master/examples" data-cta="浏览示例">
+    Tokio 主仓库中有一个目录，包含了更多示例。这些示例涵盖了广泛的功能，包括通道、文件系统操作、计时器以及各种网络场景。
   </x-card>
 </x-cards>
+
+查看完这些示例后，您可能希望深入了解 [核心概念](./concepts.md)，或查阅全面的 [API 参考](./api.md) 以获取具体细节。

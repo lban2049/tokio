@@ -1,23 +1,21 @@
 # Asynchronous I/O
 
-Tokio provides a comprehensive suite of non-blocking I/O primitives for building high-performance network applications, working with the filesystem, and managing inter-process communication. These utilities are designed to be asynchronous, meaning they integrate with the Tokio runtime to prevent blocking threads, allowing a small number of threads to handle many concurrent operations.
+At the heart of Tokio is its non-blocking, asynchronous I/O model. This is the asynchronous version of `std::io`, designed to prevent your application from blocking threads while waiting for I/O operations to complete. Instead of waiting, tasks can yield control back to the Tokio scheduler, allowing it to run other tasks. This is the key to building applications that can handle a massive number of concurrent connections with only a few OS threads.
 
-This section covers the fundamental concepts behind Tokio's I/O operations. For detailed API information, please refer to the [API Reference](./api.md).
+Tokio provides a comprehensive suite of tools for various I/O needs, from networking to filesystem operations and inter-process communication.
 
-## The `tokio::io` Module: Core Primitives
+## The Core I/O Traits
 
-The foundation of Tokio's I/O is the `tokio::io` module, which is the asynchronous equivalent of `std::io`. It defines two fundamental traits:
+Just like the standard library, Tokio's I/O functionality is built around a pair of core traits: `AsyncRead` and `AsyncWrite`. These are the asynchronous counterparts to `std::io::Read` and `std::io::Write`.
 
-- **`AsyncRead`**: An asynchronous version of `std::io::Read` for reading bytes from a source.
-- **`AsyncWrite`**: An asynchronous version of `std::io::Write` for writing bytes to a destination.
+- **`AsyncRead`**: A trait for types that can be read from asynchronously.
+- **`AsyncWrite`**: A trait for types that can be written to asynchronously.
 
-When an operation on an `AsyncRead` or `AsyncWrite` type would need to wait for data, it yields control back to the Tokio scheduler instead of blocking the thread. This allows other tasks to run while the I/O operation is pending.
+Unlike their synchronous counterparts, these traits only contain the essential methods for asynchronous operations. A rich set of utility methods (like `read_to_string`, `write_all`, etc.) are provided by the `AsyncReadExt` and `AsyncWriteExt` extension traits, which are automatically available for any type that implements `AsyncRead` or `AsyncWrite`.
 
-Utility methods for these traits are provided through the `AsyncReadExt` and `AsyncWriteExt` extension traits, which are automatically available for any type that implements `AsyncRead` or `AsyncWrite`.
+For example, here's how you can read up to 10 bytes from a file:
 
-Here is an example of reading up to 10 bytes from a file:
-
-```rust
+```rust Rust code for reading from a file icon=logos:rust
 use tokio::io::{self, AsyncReadExt};
 use tokio::fs::File;
 
@@ -34,13 +32,11 @@ async fn main() -> io::Result<()> {
 }
 ```
 
-### Buffered Readers and Writers
+### Buffered I/O
 
-To improve efficiency and reduce the number of system calls, Tokio provides buffered I/O types similar to the standard library. The `BufReader` and `BufWriter` structs wrap any async reader or writer to provide in-memory buffering.
+To improve efficiency and reduce the number of system calls, Tokio provides buffered readers and writers, similar to the standard library. The `BufReader` and `BufWriter` structs wrap any `AsyncRead` or `AsyncWrite` type, respectively, to buffer operations. `BufReader` also enables more convenient methods, like reading line by line.
 
-`BufReader` adds convenient methods like `read_line` for reading data in chunks:
-
-```rust
+```rust Reading a line from a file icon=logos:rust
 use tokio::io::{self, BufReader, AsyncBufReadExt};
 use tokio::fs::File;
 
@@ -58,42 +54,32 @@ async fn main() -> io::Result<()> {
 }
 ```
 
-When using `BufWriter`, it is important to call the `flush()` method to ensure that all buffered data is written to the underlying writer.
+When using `BufWriter`, remember to call `.flush().await` to ensure all buffered data is written to the underlying writer.
 
-```rust
-use tokio::io::{self, BufWriter, AsyncWriteExt};
-use tokio::fs::File;
+## Types of Asynchronous I/O
 
-#[tokio::main]
-async fn main() -> io::Result<()> {
-    let f = File::create("foo.txt").await?;
-    {
-        let mut writer = BufWriter::new(f);
+Tokio provides a set of modules for different kinds of I/O and asynchronous interactions with the operating system.
 
-        // Write a byte to the buffer.
-        writer.write(&[42u8]).await?;
+<x-cards data-columns="2">
+  <x-card data-title="Networking" data-icon="lucide:network" data-href="/api/net">
+    Non-blocking TCP, UDP, and Unix Domain Sockets for building high-performance network services.
+  </x-card>
+  <x-card data-title="Filesystem" data-icon="lucide:folder" data-href="/api/fs">
+    Asynchronous APIs for file and filesystem manipulation, such as reading, writing, and creating directories.
+  </x-card>
+  <x-card data-title="Processes" data-icon="lucide:terminal" data-href="/api/process">
+    Tools for spawning and managing child processes asynchronously, including capturing their standard I/O streams.
+  </x-card>
+  <x-card data-title="Signals" data-icon="lucide:radio-tower" data-href="/api/signal">
+    Asynchronous handling of Unix and Windows OS signals, allowing for graceful shutdown and other signal-based logic.
+  </x-card>
+</x-cards>
 
-        // Flush the buffer before it goes out of scope.
-        writer.flush().await?;
+### Networking Example: TCP Echo Server
 
-    } // The buffer is discarded on drop unless flushed.
+Here is a complete example of a simple TCP echo server that listens for incoming connections and writes any data it receives back to the client.
 
-    Ok(())
-}
-```
-
-## Networking with `tokio::net`
-
-The `tokio::net` module provides asynchronous TCP, UDP, and Unix Domain Socket APIs. These types integrate with the Tokio runtime to handle network I/O without blocking.
-
-Key components include:
-- **`TcpListener` & `TcpStream`**: For building TCP clients and servers.
-- **`UdpSocket`**: For UDP communication.
-- **`UnixListener` & `UnixStream`**: For stream-based communication over Unix sockets (on Unix-like systems).
-
-Below is an example of a simple TCP echo server that accepts connections and writes back any data it receives.
-
-```rust
+```rust A simple TCP echo server icon=logos:rust
 use tokio::net::TcpListener;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -107,10 +93,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tokio::spawn(async move {
             let mut buf = [0; 1024];
 
-            // In a loop, read data from the socket and write it back.
+            // In a loop, read data from the socket and write the data back.
             loop {
                 let n = match socket.read(&mut buf).await {
-                    Ok(0) => return, // socket closed
+                    // socket closed
+                    Ok(0) => return,
                     Ok(n) => n,
                     Err(e) => {
                         eprintln!("failed to read from socket; err = {:?}", e);
@@ -118,6 +105,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 };
 
+                // Write the data back
                 if let Err(e) = socket.write_all(&buf[0..n]).await {
                     eprintln!("failed to write to socket; err = {:?}", e);
                     return;
@@ -128,61 +116,43 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-## Filesystem Operations with `tokio::fs`
+### Filesystem: The Blocking Reality
 
-The `tokio::fs` module provides asynchronous APIs for file and directory manipulation. It's important to understand that most operating systems do not offer true asynchronous filesystem APIs. To overcome this, Tokio uses its blocking thread pool (`spawn_blocking`) to execute filesystem operations in the background, preventing them from blocking the main runtime threads.
+It's important to understand that most operating systems do not provide true asynchronous file system APIs. To work around this, Tokio's `fs` module uses the `spawn_blocking` function internally. This means that file operations are executed on a dedicated thread pool for blocking tasks, preventing them from blocking the main asynchronous tasks on the runtime's core threads.
 
-This module is intended for ordinary files. For special files like named pipes, it is better to use dedicated types like `tokio::net::unix::pipe`.
+While this provides an asynchronous API, it carries performance implications. For optimal performance, it's recommended to batch file operations into as few calls as possible, for example by using `tokio::fs::write` for the entire file at once, or wrapping a `File` in a `BufWriter`.
 
-Here's how you can read the entire contents of a file into a string:
+### Process Management
 
-```rust
-async fn read_file_contents() -> std::io::Result<()> {
-    let contents = tokio::fs::read_to_string("my_file.txt").await?;
-    println!("File has {} lines.", contents.lines().count());
-    Ok(())
-}
-```
+Tokio allows you to manage child processes asynchronously using `tokio::process::Command`. It provides a familiar builder API, similar to `std::process::Command`, but its execution methods are `async`.
 
-## Managing Processes with `tokio::process`
+Here is an example that spawns the `echo` command and captures its output:
 
-Tokio allows you to manage child processes asynchronously through the `tokio::process` module. The `Command` struct mimics the API of `std::process::Command` but provides asynchronous methods like `spawn`, `status`, and `output`.
-
-This example spawns the `echo` command and captures its output:
-
-```rust
+```rust Spawning a command and capturing output icon=logos:rust
 use tokio::process::Command;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let output = Command::new("echo")
-        .arg("hello")
-        .arg("world")
-        .output()
-        .await?;
+    // Use `output` which returns a future instead of
+    // a `Child` immediately.
+    let output = Command::new("echo").arg("hello").arg("world")
+                        .output()
+                        .await?;
 
     assert!(output.status.success());
     assert_eq!(output.stdout, b"hello world\n");
-
     Ok(())
 }
 ```
 
+### Standard I/O
+
+Tokio also provides asynchronous APIs for standard input, output, and error via the `tokio::io::stdin`, `stdout`, and `stderr` functions. These are asynchronous versions of the standard library's handles and implement `AsyncRead` and `AsyncWrite`. Note that these functions **must** be called from within the context of a Tokio runtime.
+
 ## Next Steps
 
-You've learned about the core concepts of asynchronous I/O in Tokio. To dive deeper into the specific APIs, explore the following sections:
+With a solid understanding of asynchronous I/O, you are ready to explore how to manage state and communication between tasks.
 
-<x-cards data-columns="2">
-  <x-card data-title="I/O API Reference" data-icon="lucide:file-text" data-href="/api/io">
-    Detailed documentation for asynchronous I/O traits, helpers, and type definitions.
-  </x-card>
-  <x-card data-title="Networking API Reference" data-icon="lucide:globe" data-href="/api/net">
-    API documentation for TCP, UDP, and Unix socket types for network communication.
-  </x-card>
-  <x-card data-title="Filesystem API Reference" data-icon="lucide:folder" data-href="/api/fs">
-    API documentation for asynchronous file and filesystem manipulation operations.
-  </x-card>
-  <x-card data-title="Processes API Reference" data-icon="lucide:terminal-square" data-href="/api/process">
-    API documentation for asynchronous process management.
-  </x-card>
-</x-cards>
+<x-card data-title="Synchronization" data-icon="lucide:link" data-href="/concepts/synchronization" data-cta="Learn about Synchronization">
+  Explore Tokio's synchronization primitives like channels and mutexes for coordinating asynchronous tasks.
+</x-card>

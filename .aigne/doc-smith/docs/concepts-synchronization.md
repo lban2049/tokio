@@ -1,69 +1,41 @@
 # Synchronization
 
-Asynchronous programs often involve multiple tasks running independently. To coordinate these tasks and manage shared resources, Tokio provides a suite of synchronization primitives. These tools are essential for building correct and efficient concurrent applications.
+Asynchronous programs, by their nature, involve multiple tasks running independently. To build robust applications, these tasks often need to communicate and synchronize their actions. Tokio provides a comprehensive suite of synchronization primitives to manage shared state and coordinate work between tasks safely and efficiently.
 
-Tokio's synchronization primitives can be broadly divided into two categories:
+These primitives can be broadly categorized into two groups:
 
-1.  **Message Passing**: Tasks communicate by sending messages to each other through channels. This approach avoids explicit shared state and is often easier to reason about.
-2.  **State Synchronization**: Traditional synchronization primitives like mutexes and semaphores, adapted for the asynchronous world. These are used to control access to shared, mutable data.
+1.  **Message Passing (Channels):** Tasks communicate by sending messages to each other through channels. This approach avoids shared mutable state, which can simplify concurrent code and prevent entire classes of bugs.
+2.  **State Synchronization:** For situations where shared state is necessary, Tokio provides asynchronous versions of standard synchronization primitives like mutexes and semaphores. These tools control access to shared data, ensuring that only one task (or a limited number of tasks) can access it at a time.
 
-All synchronization primitives in this module are runtime-agnostic and can be used with any Tokio runtime or even non-Tokio runtimes. When used within a Tokio runtime, they participate in cooperative scheduling to prevent task starvation.
+## Message Passing with Channels
 
-## Message Passing
+Tokio offers several types of channels, each tailored for a different communication pattern. Choosing the right channel is key to building efficient and correct applications.
 
-Message passing is a common pattern for synchronization in Tokio. It involves independent tasks sending messages through channels. Tokio provides several channel types, each suited for different communication patterns.
-
-```d2
-direction: down
-
-Channels: {
-  grid-columns: 2
-  grid-gap: 50
-
-  oneshot: "oneshot: Single Value" {
-    Producer -> Consumer: "send(value)"
-  }
-
-  mpsc: "mpsc: Multi-Producer, Single-Consumer" {
-    Producer-1: {label: "Producer 1"}
-    Producer-2: {label: "Producer 2"}
-    Producer-N: {label: "..."}
-
-    Producer-1 -> Consumer
-    Producer-2 -> Consumer
-    Producer-N -> Consumer
-  }
-
-  broadcast: "broadcast: Multi-Producer, Multi-Consumer" {
-    Producer-1: {label: "Producer 1"}
-    Producer-2: {label: "Producer 2"}
-    Consumer-1: {label: "Consumer 1"}
-    Consumer-2: {label: "Consumer 2"}
-
-    Producer-1 -> Consumer-1
-    Producer-1 -> Consumer-2
-    Producer-2 -> Consumer-1
-    Producer-2 -> Consumer-2
-  }
-
-  watch: "watch: State Distribution" {
-    Producer -> Consumer-1: {label: "notify(latest_value)"}
-    Producer -> Consumer-2: {label: "notify(latest_value)"}
-    Consumer-1: {label: "Consumer 1"}
-    Consumer-2: {label: "Consumer 2"}
-  }
-}
-```
+<x-cards data-columns="2">
+  <x-card data-title="oneshot" data-icon="lucide:arrow-right-from-line">
+    A single-producer, single-consumer channel for sending a single value, typically for returning the result of a computation.
+  </x-card>
+  <x-card data-title="mpsc" data-icon="lucide:git-merge">
+    A multi-producer, single-consumer channel for sending many values from multiple tasks to a single worker task.
+  </x-card>
+  <x-card data-title="broadcast" data-icon="lucide:rss">
+    A multi-producer, multi-consumer channel where every message is seen by every receiver. Ideal for fan-out patterns.
+  </x-card>
+  <x-card data-title="watch" data-icon="lucide:eye">
+    A multi-producer, multi-consumer channel that only stores the most recent value. Perfect for broadcasting configuration changes.
+  </x-card>
+</x-cards>
 
 ### Oneshot Channel
 
-The `oneshot` channel allows sending a single value from one producer to one consumer. It's typically used to send the result of a computation to a waiting task.
+The `oneshot` channel is designed for sending a single value from one task to another. It's most commonly used to send the result of a computation back to a waiting task.
 
-```rust
+```rust icon=logos:rust
 use tokio::sync::oneshot;
 
 async fn some_computation() -> String {
-    "represents the result of the computation".to_string()
+    // ... perform some work ...
+    "result of the computation".to_string()
 }
 
 #[tokio::main]
@@ -75,50 +47,62 @@ async fn main() {
         tx.send(res).unwrap();
     });
 
-    // Do other work while the computation is happening in the background
+    // Do other work while the computation runs in the background
 
-    // Wait for the computation result
-    let res = rx.await.unwrap();
-    println!("Got = {}", res);
+    // Wait for the result
+    let result = rx.await.unwrap();
+    println!("Got result: {}", result);
 }
 ```
-If a task produces a result just before terminating, you can use its `JoinHandle` directly instead of a `oneshot` channel.
+
+If a task's final action is to produce a value, you can often use its `JoinHandle` directly instead of a `oneshot` channel, which can be more efficient.
 
 ### MPSC Channel
 
-The `mpsc` (multi-producer, single-consumer) channel allows sending many values from multiple producers to a single consumer. It's often used for distributing work to a task or collecting results from many computations.
+The `mpsc` (multi-producer, single-consumer) channel allows many tasks to send messages to a single receiving task. This is a common pattern for distributing work to a dedicated worker task or for aggregating results from multiple sources.
 
-When creating an `mpsc` channel, you must specify its capacity. This capacity is the maximum number of messages that can be buffered, which is crucial for handling backpressure.
+When creating an `mpsc` channel, you must specify a capacity, which is the maximum number of messages that can be buffered. This capacity is crucial for handling backpressure: if the channel is full, senders will wait asynchronously until there is space, preventing the consumer from being overwhelmed.
 
-```rust
+```rust icon=logos:rust
 use tokio::sync::mpsc;
 
-async fn some_computation(input: u32) -> String {
-    format!("the result of computation {}", input)
+async fn process_data(data: u32) {
+    println!("Processing {}", data);
 }
 
 #[tokio::main]
 async fn main() {
     let (tx, mut rx) = mpsc::channel(100);
 
+    // Spawn a worker task to process data
     tokio::spawn(async move {
-        for i in 0..10 {
-            let res = some_computation(i).await;
-            tx.send(res).await.unwrap();
+        while let Some(data) = rx.recv().await {
+            process_data(data).await;
         }
     });
 
-    while let Some(res) = rx.recv().await {
-        println!("got = {}", res);
+    // Send data from multiple producer tasks
+    for i in 0..10 {
+        let tx_clone = tx.clone();
+        tokio::spawn(async move {
+            tx_clone.send(i).await.unwrap();
+        });
     }
+
+    // Drop the original sender to allow the receiver to terminate
+    drop(tx);
+
+    // The program will exit once all data is processed.
 }
 ```
 
 ### Broadcast Channel
 
-The `broadcast` channel supports a multi-producer, multi-consumer pattern where every consumer receives every value. This is useful for "fan-out" style patterns like pub/sub systems.
+A `broadcast` channel allows multiple senders to broadcast messages to multiple receivers. Every receiver sees every message sent *after* it subscribes. This is useful for pub/sub systems, live updates, or chat applications where a single event needs to be fanned out to many listeners.
 
-```rust
+If a receiver is too slow and messages build up, it will start receiving `Lagged` errors, indicating that it has missed some messages. This prevents a single slow receiver from blocking the entire system.
+
+```rust icon=logos:rust
 use tokio::sync::broadcast;
 
 #[tokio::main]
@@ -143,99 +127,105 @@ async fn main() {
 
 ### Watch Channel
 
-The `watch` channel is a multi-producer, multi-consumer channel that only stores the most recent value. Consumers are notified when a new value is sent, but they are not guaranteed to see every value. This is ideal for broadcasting configuration changes or signaling state transitions, such as a shutdown signal.
+The `watch` channel is similar to a broadcast channel but with a key difference: it only retains the single most recent value. Receivers are notified when a new value is sent, but they are not guaranteed to see every intermediate value. This makes it highly efficient for distributing state updates, such as configuration changes, where only the latest version matters.
 
-```rust
+```rust icon=logos:rust
 use tokio::sync::watch;
 use tokio::time::{self, Duration};
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 struct Config {
-    timeout: Duration,
+    api_key: String,
 }
 
 #[tokio::main]
 async fn main() {
-    let config = Config { timeout: Duration::from_secs(1) };
-    let (tx, mut rx) = watch::channel(config.clone());
+    let initial_config = Config { api_key: "initial_key".to_string() };
+    let (tx, mut rx) = watch::channel(initial_config);
 
+    // A worker task that uses the configuration
     tokio::spawn(async move {
-        time::sleep(Duration::from_secs(2)).await;
-        let new_config = Config { timeout: Duration::from_secs(5) };
-        tx.send(new_config).unwrap();
+        loop {
+            // Wait for a change in configuration
+            if rx.changed().await.is_err() {
+                // Sender was dropped
+                break;
+            }
+            let config = rx.borrow().clone();
+            println!("Worker sees new config: {:?}", config);
+        }
     });
 
-    loop {
-        tokio::select! {
-            _ = rx.changed() => {
-                let new_timeout = rx.borrow().timeout;
-                println!("Configuration changed: new timeout is {:?}", new_timeout);
-                if new_timeout == Duration::from_secs(5) { break; }
-            }
-            _ = time::sleep(Duration::from_secs(1)) => {
-                println!("Still waiting for config change...");
-            }
-        }
-    }
+    // Simulate updating the configuration
+    time::sleep(Duration::from_millis(100)).await;
+    let new_config = Config { api_key: "updated_key".to_string() };
+    tx.send(new_config).unwrap();
+
+    time::sleep(Duration::from_millis(100)).await;
 }
 ```
 
 ## State Synchronization
 
-For managing shared state directly, Tokio provides asynchronous versions of the synchronization primitives found in the standard library. These types wait asynchronously instead of blocking threads.
+When tasks need to directly access and modify shared data, message passing might not be the best fit. For these scenarios, Tokio provides asynchronous versions of traditional synchronization primitives.
 
 <x-cards data-columns="2">
   <x-card data-title="Mutex" data-icon="lucide:lock">
-    Provides mutual exclusion, ensuring only one task can access data at a time. It guarantees FIFO ordering for lock acquisition.
+    Provides mutual exclusion, ensuring only one task can access data at a time. It's fair (FIFO).
   </x-card>
-  <x-card data-title="RwLock" data-icon="lucide:book-open">
-    Allows multiple readers or a single writer at any time. It is write-preferring to prevent writer starvation.
+  <x-card data-title="RwLock" data-icon="lucide:book-open-check">
+    A reader-writer lock that allows multiple concurrent readers or a single exclusive writer.
   </x-card>
-  <x-card data-title="Semaphore" data-icon="lucide:traffic-cone">
-    Limits the number of concurrent tasks that can access a resource. It holds a number of permits that tasks must acquire.
+  <x-card data-title="Semaphore" data-icon="lucide:ticket">
+    Limits the number of concurrent tasks that can access a resource by managing a set of permits.
   </x-card>
   <x-card data-title="Barrier" data-icon="lucide:git-commit-horizontal">
-    Enables multiple tasks to wait for each other to reach a certain point before continuing execution together.
+    Allows multiple tasks to wait until all of them have reached a certain point of execution before proceeding.
   </x-card>
   <x-card data-title="Notify" data-icon="lucide:bell-ring">
-    A basic tool for notifying a single waiting task to resume its work, without sending any data.
+    A basic primitive to notify a single waiting task to wake up and resume its work, without sending any data.
   </x-card>
 </x-cards>
 
 ### Mutex
 
-An asynchronous `Mutex` provides exclusive access to data. Unlike `std::sync::Mutex`, its lock guard can be held across `.await` points. It's best suited for protecting I/O resources. For in-memory data, `std::sync::Mutex` is often preferred.
+A `tokio::sync::Mutex` provides mutually exclusive access to data. Unlike its counterpart in the standard library, locking a Tokio `Mutex` is an asynchronous operation. The lock guard can be held across `.await` points, which is essential for managing shared I/O resources like a database connection pool.
 
-```rust
+Tokio's `Mutex` is fair, meaning it grants locks in the order they are requested (First-In, First-Out).
+
+```rust icon=logos:rust
 use tokio::sync::Mutex;
 use std::sync::Arc;
 
 #[tokio::main]
 async fn main() {
-    let data = Arc::new(Mutex::new(0));
+    let counter = Arc::new(Mutex::new(0));
     let mut handles = vec![];
 
     for _ in 0..10 {
-        let data_clone = Arc::clone(&data);
-        handles.push(tokio::spawn(async move {
-            let mut lock = data_clone.lock().await;
-            *lock += 1;
-        }));
+        let counter_clone = Arc::clone(&counter);
+        let handle = tokio::spawn(async move {
+            let mut num = counter_clone.lock().await;
+            *num += 1;
+        });
+        handles.push(handle);
     }
 
     for handle in handles {
         handle.await.unwrap();
     }
 
-    assert_eq!(*data.lock().await, 10);
+    assert_eq!(*counter.lock().await, 10);
 }
 ```
 
 ### RwLock
 
-An `RwLock` (Reader-Writer Lock) allows for either multiple readers or one writer at a time. This can be more efficient than a `Mutex` for data that is read frequently but written to infrequently.
+An `RwLock` (Reader-Writer Lock) allows for either multiple readers or a single writer to access data at any given time. This is beneficial for data that is read frequently but written to infrequently, as it allows for higher concurrency than a `Mutex`.
 
-```rust
+Tokio's `RwLock` is write-preferring to prevent writers from being starved by a continuous stream of readers.
+
+```rust icon=logos:rust
 use tokio::sync::RwLock;
 
 #[tokio::main]
@@ -248,73 +238,80 @@ async fn main() {
         let r2 = lock.read().await;
         assert_eq!(*r1, 5);
         assert_eq!(*r2, 5);
-    } // read locks are dropped here
+    } // Read locks are dropped here
 
     // Only one writer lock can be held
     {
         let mut w = lock.write().await;
         *w += 1;
         assert_eq!(*w, 6);
-    } // write lock is dropped here
+    } // Write lock is dropped here
 }
 ```
 
 ### Semaphore
 
-A `Semaphore` is used to limit the amount of concurrent access to a resource. It maintains a set of permits; a task must acquire a permit before proceeding.
+A `Semaphore` maintains a count of permits. Tasks can `acquire` a permit to access a resource, and they release it when done. If no permits are available, a task will wait until one is freed. This is a powerful tool for controlling access to a limited pool of resources, such as limiting the number of concurrent network connections or file handles.
 
-```rust
+```rust icon=logos:rust
 use tokio::sync::Semaphore;
+use std::sync::Arc;
 
 #[tokio::main]
 async fn main() {
-    let semaphore = Semaphore::new(3);
+    // Limit concurrency to 3 tasks
+    let semaphore = Arc::new(Semaphore::new(3));
+    let mut handles = vec![];
 
-    let _a_permit = semaphore.acquire().await.unwrap();
-    let _two_permits = semaphore.acquire_many(2).await.unwrap();
+    for i in 0..5 {
+        let semaphore_clone = Arc::clone(&semaphore);
+        let handle = tokio::spawn(async move {
+            let _permit = semaphore_clone.acquire().await.unwrap();
+            println!("Task {} is running", i);
+            // Simulating work
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        });
+        handles.push(handle);
+    }
 
-    assert_eq!(semaphore.available_permits(), 0);
-
-    // This would wait until a permit is released
-    // let _ = semaphore.acquire().await;
+    for handle in handles {
+        handle.await.unwrap();
+    }
 }
 ```
 
 ### Barrier
 
-A `Barrier` allows multiple tasks to wait until all of them have reached a certain point of execution before any of them are allowed to proceed.
+A `Barrier` is used to synchronize a group of tasks at a certain point in their execution. When a task reaches the barrier, it calls `.wait()` and blocks. Once the specified number of tasks have reached the barrier, all of them are unblocked and can proceed. One task is designated as the "leader" each time the barrier is passed.
 
-```rust
+```rust icon=logos:rust
 use tokio::sync::Barrier;
 use std::sync::Arc;
 
 #[tokio::main]
 async fn main() {
-    let mut handles = Vec::with_capacity(10);
     let barrier = Arc::new(Barrier::new(10));
+    let mut handles = vec![];
 
     for i in 0..10 {
-        let c = barrier.clone();
-        handles.push(tokio::spawn(async move {
-            println!("Task {} waiting at barrier", i);
-            let wait_result = c.wait().await;
-            println!("Task {} passed barrier", i);
-            wait_result
-        }));
+        let barrier_clone = Arc::clone(&barrier);
+        let handle = tokio::spawn(async move {
+            println!("Task {} waiting at barrier...", i);
+            let wait_result = barrier_clone.wait().await;
+            println!("Task {} passed barrier!", i);
+            if wait_result.is_leader() {
+                println!("Task {} was the leader.", i);
+            }
+        });
+        handles.push(handle);
     }
 
-    let mut num_leaders = 0;
     for handle in handles {
-        let wait_result = handle.await.unwrap();
-        if wait_result.is_leader() {
-            num_leaders += 1;
-        }
+        handle.await.unwrap();
     }
-
-    assert_eq!(num_leaders, 1);
 }
 ```
 
----
+With these powerful synchronization tools, you can build complex, multi-task applications in Tokio that are both safe and performant. For a deeper dive into their APIs, please see the [API Reference](./api-sync.md).
 
-With these tools, you can manage complex interactions between asynchronous tasks safely and efficiently. For detailed API information, please refer to the [Synchronization Primitives API Reference](./api-sync.md). Next, we will explore how Tokio handles time-based operations in the [Timers](./concepts-timers.md) section.
+Next, let's explore how to handle time-based operations with [Timers](./concepts-timers.md).
