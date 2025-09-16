@@ -1,66 +1,58 @@
 [
   {
     "title": "Overview",
-    "description": "Provides a high-level introduction to Tokio, its core components, and its philosophy for building fast, reliable, and scalable asynchronous applications.",
+    "description": "An introduction to Tokio, its features (fast, reliable, scalable), and its core components including the scheduler, reactor, and asynchronous I/O primitives.",
     "path": "/overview",
-    "parentId": null,
     "sourceIds": [
       "tokio/src/lib.rs",
-      "tokio/README.md"
-    ]
+      "tokio/README.md",
+      "README.md"
+    ],
+    "parentId": ""
   },
   {
     "title": "Getting Started",
-    "description": "A step-by-step guide to setting up a new Tokio project, including installation and a simple, working TCP echo server example.",
+    "description": "A quick-start guide for new users, covering project setup and a simple TCP echo server example to get up and running quickly.",
     "path": "/getting-started",
-    "parentId": null,
     "sourceIds": [
       "tokio/src/lib.rs",
+      "tokio/README.md",
       "README.md"
-    ]
-  },
-  {
-    "title": "Core Concepts",
-    "description": "Explores the fundamental concepts and components that make up the Tokio runtime, providing a solid foundation for advanced usage.",
-    "path": "/concepts",
-    "parentId": null,
-    "sourceIds": [
-      "tokio/src/lib.rs"
-    ]
+    ],
+    "parentId": ""
   },
   {
     "title": "Tasks & Scheduling",
-    "description": "Covers how to work with asynchronous tasks, including spawning, cancellation, yielding, and handling blocking operations.",
-    "path": "/concepts/tasks",
-    "parentId": "/concepts",
+    "description": "Explore Tokio's core concepts for managing asynchronous operations, including task spawning, synchronization, and timing.",
+    "path": "/tasks-scheduling",
+    "sourceIds": [
+      "tokio/src/lib.rs",
+      "tokio/src/task/mod.rs",
+      "tokio/src/sync/mod.rs",
+      "tokio/src/time/mod.rs",
+      "tokio/src/runtime/mod.rs"
+    ],
+    "parentId": ""
+  },
+  {
+    "title": "Spawning & Managing Tasks",
+    "description": "Learn how to create and manage concurrent tasks using `spawn`, `spawn_local`, and `spawn_blocking`. Understand the `JoinHandle` for retrieving task results and `JoinSet` for managing groups of tasks.",
+    "path": "/tasks-scheduling/spawning",
     "sourceIds": [
       "tokio/src/lib.rs",
       "tokio/src/task/mod.rs",
       "tokio/src/task/spawn.rs",
+      "tokio/src/task/local.rs",
+      "tokio/src/task/join_set.rs",
       "tokio/src/task/blocking.rs",
-      "tokio/src/task/yield_now.rs",
-      "tokio/src/task/join_set.rs"
-    ]
+      "tokio/src/task/yield_now.rs"
+    ],
+    "parentId": "/tasks-scheduling"
   },
   {
-    "title": "Asynchronous I/O",
-    "description": "Details Tokio's non-blocking I/O primitives for networking, filesystem operations, and inter-process communication.",
-    "path": "/concepts/io",
-    "parentId": "/concepts",
-    "sourceIds": [
-      "tokio/src/lib.rs",
-      "tokio/src/io/mod.rs",
-      "tokio/src/net/mod.rs",
-      "tokio/src/fs/mod.rs",
-      "tokio/src/process/mod.rs",
-      "tokio/src/signal/mod.rs"
-    ]
-  },
-  {
-    "title": "Synchronization",
-    "description": "Explains the various synchronization primitives like channels (mpsc, oneshot, watch, broadcast), mutexes, and semaphores for managing shared state between tasks.",
-    "path": "/concepts/synchronization",
-    "parentId": "/concepts",
+    "title": "Synchronization Primitives",
+    "description": "A guide to Tokio's synchronization tools, including channels (mpsc, oneshot, watch, broadcast) and state synchronization types (Mutex, RwLock, Semaphore, Barrier).",
+    "path": "/tasks-scheduling/synchronization",
     "sourceIds": [
       "tokio/src/lib.rs",
       "tokio/src/sync/mod.rs",
@@ -71,176 +63,165 @@
       "tokio/src/sync/mutex.rs",
       "tokio/src/sync/rwlock.rs",
       "tokio/src/sync/barrier.rs",
-      "tokio/src/sync/semaphore.rs"
-    ]
+      "tokio/src/sync/semaphore.rs",
+      "tokio/src/sync/notify.rs",
+      "tokio/src/sync/set_once.rs",
+      "tokio/src/sync/once_cell.rs"
+    ],
+    "parentId": "/tasks-scheduling"
   },
   {
-    "title": "Timers",
-    "description": "Describes utilities for tracking time and scheduling work, including sleeps, intervals, and timeouts.",
-    "path": "/concepts/timers",
-    "parentId": "/concepts",
+    "title": "Time, Delays, and Timeouts",
+    "description": "Learn how to work with time-based operations in Tokio, including `sleep` for delays, `interval` for periodic tasks, and `timeout` for bounding execution time.",
+    "path": "/tasks-scheduling/time",
     "sourceIds": [
       "tokio/src/lib.rs",
       "tokio/src/time/mod.rs",
       "tokio/src/time/sleep.rs",
       "tokio/src/time/interval.rs",
       "tokio/src/time/timeout.rs"
-    ]
+    ],
+    "parentId": "/tasks-scheduling"
   },
   {
     "title": "The Runtime",
-    "description": "Details the Tokio runtime itself, including its schedulers, configuration options, and how it executes asynchronous code.",
-    "path": "/concepts/runtime",
-    "parentId": "/concepts",
+    "description": "Understand the Tokio runtime, its schedulers (multi-threaded and current-thread), and how to configure it using the `Builder` API and `#[tokio::main]` macro.",
+    "path": "/tasks-scheduling/runtime",
     "sourceIds": [
       "tokio/src/lib.rs",
       "tokio/src/runtime/mod.rs",
+      "tokio/src/runtime/builder.rs",
       "tokio/src/runtime/runtime.rs",
-      "tokio/src/runtime/builder.rs"
-    ]
+      "tokio/src/runtime/handle.rs"
+    ],
+    "parentId": "/tasks-scheduling"
   },
   {
-    "title": "API Reference",
-    "description": "A comprehensive, searchable reference for all public APIs provided by the Tokio crate, organized by module.",
-    "path": "/api",
-    "parentId": null,
+    "title": "Asynchronous I/O",
+    "description": "An introduction to Tokio's non-blocking I/O model, covering the core `AsyncRead` and `AsyncWrite` traits and the various I/O resources available.",
+    "path": "/io",
     "sourceIds": [
-      "tokio/src/lib.rs"
-    ]
-  },
-  {
-    "title": "I/O",
-    "description": "API documentation for asynchronous I/O traits, helpers, and type definitions.",
-    "path": "/api/io",
-    "parentId": "/api",
-    "sourceIds": [
+      "tokio/src/lib.rs",
       "tokio/src/io/mod.rs",
       "tokio/src/io/async_read.rs",
-      "tokio/src/io/async_write.rs",
-      "tokio/src/io/async_buf_read.rs",
-      "tokio/src/io/async_seek.rs",
-      "tokio/src/io/split.rs",
-      "tokio/src/io/join.rs"
-    ]
+      "tokio/src/io/async_write.rs"
+    ],
+    "parentId": ""
   },
   {
     "title": "Networking",
-    "description": "API documentation for TCP, UDP, and Unix socket types for network communication.",
-    "path": "/api/net",
-    "parentId": "/api",
+    "description": "Guidance on using Tokio's asynchronous networking primitives, including TCP (`TcpListener`, `TcpStream`), UDP (`UdpSocket`), and Unix Domain Sockets.",
+    "path": "/io/networking",
     "sourceIds": [
       "tokio/src/net/mod.rs",
       "tokio/src/net/tcp/mod.rs",
+      "tokio/src/net/tcp/listener.rs",
+      "tokio/src/net/tcp/socket.rs",
+      "tokio/src/net/tcp/stream.rs",
       "tokio/src/net/udp.rs",
       "tokio/src/net/unix/mod.rs"
-    ]
-  },
-  {
-    "title": "Synchronization Primitives",
-    "description": "API documentation for tasks synchronization primitives, including channels, mutexes, and semaphores.",
-    "path": "/api/sync",
-    "parentId": "/api",
-    "sourceIds": [
-      "tokio/src/sync/mod.rs",
-      "tokio/src/sync/mpsc/mod.rs",
-      "tokio/src/sync/oneshot.rs",
-      "tokio/src/sync/broadcast.rs",
-      "tokio/src/sync/watch.rs",
-      "tokio/src/sync/mutex.rs",
-      "tokio/src/sync/rwlock.rs",
-      "tokio/src/sync/barrier.rs",
-      "tokio/src/sync/semaphore.rs",
-      "tokio/src/sync/notify.rs"
-    ]
-  },
-  {
-    "title": "Tasks",
-    "description": "API documentation for managing asynchronous tasks, including spawning and task-local storage.",
-    "path": "/api/task",
-    "parentId": "/api",
-    "sourceIds": [
-      "tokio/src/task/mod.rs",
-      "tokio/src/task/spawn.rs",
-      "tokio/src/task/blocking.rs",
-      "tokio/src/task/yield_now.rs",
-      "tokio/src/task/join_set.rs",
-      "tokio/src/task/local.rs"
-    ]
-  },
-  {
-    "title": "Time",
-    "description": "API documentation for utilities that track time, including sleeps, intervals, and timeouts.",
-    "path": "/api/time",
-    "parentId": "/api",
-    "sourceIds": [
-      "tokio/src/time/mod.rs",
-      "tokio/src/time/sleep.rs",
-      "tokio/src/time/interval.rs",
-      "tokio/src/time/timeout.rs",
-      "tokio/src/time/instant.rs"
-    ]
+    ],
+    "parentId": "/io"
   },
   {
     "title": "Filesystem",
-    "description": "API documentation for asynchronous file and filesystem manipulation operations.",
-    "path": "/api/fs",
-    "parentId": "/api",
+    "description": "Learn how to perform asynchronous file operations with `tokio::fs`, including reading, writing, and manipulating files and directories.",
+    "path": "/io/fs",
     "sourceIds": [
+      "tokio/src/lib.rs",
       "tokio/src/fs/mod.rs",
       "tokio/src/fs/file.rs",
-      "tokio/src/fs/open_options.rs",
-      "tokio/src/fs/read_dir.rs"
-    ]
+      "tokio/src/fs/open_options.rs"
+    ],
+    "parentId": "/io"
   },
   {
-    "title": "Processes",
-    "description": "API documentation for asynchronous process management.",
-    "path": "/api/process",
-    "parentId": "/api",
+    "title": "Child Processes",
+    "description": "A guide to spawning and managing asynchronous child processes using `tokio::process::Command`.",
+    "path": "/io/process",
     "sourceIds": [
+      "tokio/src/lib.rs",
       "tokio/src/process/mod.rs"
-    ]
+    ],
+    "parentId": "/io"
   },
   {
-    "title": "Signals",
-    "description": "API documentation for asynchronous signal handling.",
-    "path": "/api/signal",
-    "parentId": "/api",
+    "title": "OS Signals",
+    "description": "Learn how to handle Unix and Windows OS signals asynchronously within a Tokio application.",
+    "path": "/io/signals",
     "sourceIds": [
+      "tokio/src/lib.rs",
       "tokio/src/signal/mod.rs",
       "tokio/src/signal/unix.rs",
       "tokio/src/signal/windows.rs"
-    ]
+    ],
+    "parentId": "/io"
   },
   {
-    "title": "Runtime",
-    "description": "API documentation for the Tokio runtime, including builders and handles for manual configuration.",
-    "path": "/api/runtime",
-    "parentId": "/api",
+    "title": "Configuration",
+    "description": "Advanced configuration options for tailoring Tokio to specific needs, including feature flags and platform-specific settings.",
+    "path": "/configuration",
     "sourceIds": [
-      "tokio/src/runtime/mod.rs",
-      "tokio/src/runtime/runtime.rs",
-      "tokio/src/runtime/builder.rs",
-      "tokio/src/runtime/handle.rs"
-    ]
+      "tokio/src/lib.rs"
+    ],
+    "parentId": ""
   },
   {
-    "title": "Examples",
-    "description": "Provides a collection of working code examples that demonstrate various Tokio features and use cases.",
-    "path": "/examples",
-    "parentId": null,
+    "title": "Feature Flags",
+    "description": "A detailed breakdown of Tokio's feature flags, guiding both application and library authors on how to minimize dependencies and compiled code.",
+    "path": "/configuration/features",
+    "sourceIds": [
+      "tokio/src/lib.rs"
+    ],
+    "parentId": "/configuration"
+  },
+  {
+    "title": "Platform Support",
+    "description": "Details on officially supported platforms, including specific considerations for WASM environments.",
+    "path": "/configuration/platforms",
+    "sourceIds": [
+      "tokio/src/lib.rs"
+    ],
+    "parentId": "/configuration"
+  },
+  {
+    "title": "Unstable Features",
+    "description": "Instructions on how to opt-in to and use unstable features, with the understanding that their APIs may change.",
+    "path": "/configuration/unstable",
     "sourceIds": [
       "tokio/src/lib.rs",
+      "tokio/CHANGELOG.md"
+    ],
+    "parentId": "/configuration"
+  },
+  {
+    "title": "Project Information",
+    "description": "Information about the Tokio project, including how to contribute, where to find help, and release details.",
+    "path": "/project",
+    "sourceIds": [
+      "tokio/README.md",
+      "README.md",
+      "tokio/CHANGELOG.md"
+    ],
+    "parentId": ""
+  },
+  {
+    "title": "Contributing & Support",
+    "description": "Guidelines for contributing to the Tokio project, MSRV policy, release schedule, LTS policy, and links to community resources.",
+    "path": "/project/contributing",
+    "sourceIds": [
+      "tokio/README.md",
       "README.md"
-    ]
+    ],
+    "parentId": "/project"
   },
   {
     "title": "Changelog",
-    "description": "A detailed record of all notable changes made to the Tokio library in each version.",
-    "path": "/changelog",
-    "parentId": null,
+    "description": "A detailed log of changes, fixes, and additions for each version of the Tokio crate.",
+    "path": "/project/changelog",
     "sourceIds": [
       "tokio/CHANGELOG.md"
-    ]
+    ],
+    "parentId": "/project"
   }
 ]

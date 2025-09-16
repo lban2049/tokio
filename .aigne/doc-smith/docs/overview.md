@@ -1,73 +1,77 @@
 # Overview
 
-Tokio is a runtime for writing reliable, asynchronous, and slim network applications with the Rust programming language without compromising speed.
-
-It is an event-driven, non-blocking I/O platform for writing asynchronous applications. At a high level, it provides a few major components that are essential for building robust and performant systems.
+Tokio is a runtime for writing reliable, asynchronous, and slim applications with the Rust programming language. It provides an event-driven, non-blocking I/O platform that's essential for building high-performance network applications.
 
 <x-cards data-columns="3">
-  <x-card data-title="Fast" data-icon="lucide:gauge-circle">
-    Tokio's zero-cost abstractions give you bare-metal performance, ensuring your applications are as fast as possible.
+  <x-card data-title="Fast" data-icon="lucide:rocket">
+    Tokio's zero-cost abstractions give you bare-metal performance, ensuring your applications are fast and efficient.
   </x-card>
   <x-card data-title="Reliable" data-icon="lucide:shield-check">
-    By leveraging Rust's ownership, type system, and concurrency model, Tokio helps you reduce bugs and ensure thread safety.
+    By leveraging Rust's ownership, type system, and concurrency model, Tokio helps reduce bugs and ensure thread safety.
   </x-card>
-  <x-card data-title="Scalable" data-icon="lucide:bar-chart-big">
-    Tokio has a minimal footprint and handles backpressure and cancellation naturally, allowing your applications to scale efficiently.
+  <x-card data-title="Scalable" data-icon="lucide:scaling">
+    With a minimal footprint, Tokio handles backpressure and cancellation naturally, allowing your applications to scale effectively.
   </x-card>
 </x-cards>
 
 ## Core Components
 
-Tokio is built around a few key components that provide the foundation for asynchronous applications:
+At a high level, Tokio provides a few major components that are the building blocks for asynchronous applications:
 
-*   **Tools for Asynchronous Tasks**: Primitives for managing task lifecycle, including synchronization and communication between tasks (channels, mutexes), and utilities for handling time (timeouts, sleeps, intervals).
-*   **Asynchronous I/O APIs**: A rich set of APIs for non-blocking I/O, including TCP and UDP sockets, filesystem operations, and process and signal management.
-*   **The Runtime**: A runtime for executing asynchronous code, which includes a multi-threaded, work-stealing task scheduler, an I/O driver backed by the operating system's event queue (like epoll, kqueue, or IOCP), and a high-performance timer.
+*   **Tools for Asynchronous Tasks**: Tokio provides a powerful toolkit for managing concurrent operations. This includes spawning tasks, using synchronization primitives like channels and mutexes, and handling time-based operations such as sleeps, intervals, and timeouts. These are crucial for managing control flow in an async environment. For more details, see the [Tasks & Scheduling](./tasks-scheduling.md) guide.
 
-## A Tour of Tokio
+*   **APIs for Asynchronous I/O**: Perform non-blocking input and output with a comprehensive set of APIs. Tokio includes support for TCP, UDP, and Unix Domain Sockets, as well as asynchronous filesystem operations, child process management, and OS signal handling. Dive deeper into these features in the [Asynchronous I/O](./io.md) section.
 
-Tokio's functionality is organized into several modules, each serving a distinct purpose. Here’s a brief tour of the major APIs.
+*   **The Tokio Runtime**: The runtime is the engine that executes your asynchronous code. It includes a multi-threaded, work-stealing task scheduler, an I/O driver backed by the operating system's event queue (like epoll, kqueue, or IOCP), and a high-performance timer. Learn how to configure and manage it in [The Runtime](./tasks-scheduling-runtime.md) documentation.
 
-### Working With Tasks
+## A Quick Example
 
-Asynchronous programs in Rust are built around lightweight, non-blocking units of execution called tasks. Tokio provides powerful tools for managing them.
+Here is a basic TCP echo server that demonstrates how these components work together. It listens for incoming connections and simply writes any data it receives back to the client.
 
-- **[`tokio::task`](./api-task.md)**: Contains the core tools for working with tasks, such as the `spawn` function for scheduling new tasks on the runtime.
-- **[`tokio::sync`](./api-sync.md)**: Provides synchronization primitives for tasks, including channels (`oneshot`, `mpsc`, `watch`, `broadcast`) for communication and a non-blocking `Mutex` for protecting shared data.
-- **[`tokio::time`](./api-time.md)**: Offers utilities for tracking time, enabling you to set timeouts, sleep for a specified duration, or repeat operations at intervals.
+```rust A Simple TCP Echo Server icon=logos:rust
+use tokio::net::TcpListener;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-### Asynchronous I/O
-
-Tokio provides a comprehensive suite of modules for performing asynchronous input and output operations.
-
-- **[`tokio::io`](./api-io.md)**: The foundation of Tokio's I/O, providing the core `AsyncRead` and `AsyncWrite` traits.
-- **[`tokio::net`](./api-net.md)**: Contains non-blocking versions of TCP, UDP, and Unix Domain Sockets for network programming.
-- **[`tokio::fs`](./api-fs.md)**: Offers asynchronous APIs for filesystem I/O, similar to the standard library's `std::fs`.
-- **[`tokio::signal`](./api-signal.md)** and **[`tokio::process`](./api-process.md)**: Allow for asynchronous handling of OS signals and management of child processes.
-
-### The Runtime
-
-The Tokio runtime is responsible for executing asynchronous tasks. While most applications can start with the simple `#[tokio::main]` macro, the [`tokio::runtime`](./api-runtime.md) module provides powerful APIs for fine-grained configuration and management of the runtime when more control is needed.
-
-### CPU-bound tasks and blocking code
-
-Tokio is designed for I/O-bound applications and uses a few threads to handle many concurrent tasks. Code that performs long-running, CPU-intensive computations without awaiting can block a thread, preventing other tasks from running. To handle this, Tokio provides `spawn_blocking`, which moves the blocking or CPU-bound computation to a dedicated thread pool, ensuring the main async scheduler remains responsive.
-
-```rust A blocking task example icon=logos:rust
 #[tokio::main]
-async fn main() {
-    // This is running on a core thread.
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let listener = TcpListener::bind("127.0.0.1:8080").await?;
 
-    let blocking_task = tokio::task::spawn_blocking(|| {
-        // This is running on a blocking thread.
-        // Blocking here is ok.
-    });
+    loop {
+        let (mut socket, _) = listener.accept().await?;
 
-    // We can wait for the blocking task to complete.
-    blocking_task.await.unwrap();
+        tokio::spawn(async move {
+            let mut buf = [0; 1024];
+
+            // In a loop, read data from the socket and write the data back.
+            loop {
+                let n = match socket.read(&mut buf).await {
+                    // socket closed
+                    Ok(0) => return,
+                    Ok(n) => n,
+                    Err(e) => {
+                        eprintln!("failed to read from socket; err = {:?}", e);
+                        return;
+                    }
+                };
+
+                // Write the data back
+                if let Err(e) = socket.write_all(&buf[0..n]).await {
+                    eprintln!("failed to write to socket; err = {:?}", e);
+                    return;
+                }
+            }
+        });
+    }
 }
 ```
 
-## Ready to Dive In?
+This example showcases several key Tokio features:
 
-This overview has introduced the core ideas behind Tokio. The best way to learn is by doing. Head over to our [Getting Started](./getting-started.md) guide to set up your first Tokio application in minutes.
+-   `#[tokio::main]`: A macro to start the Tokio runtime and execute the `async` main function.
+-   `TcpListener`: An asynchronous TCP listener to accept incoming connections.
+-   `tokio::spawn`: A function to spawn a new asynchronous task for each connection, allowing the server to handle multiple clients concurrently.
+-   `AsyncReadExt` and `AsyncWriteExt`: Traits that provide asynchronous `read` and `write` methods on the socket.
+
+## Next Steps
+
+Now that you have a high-level understanding of what Tokio offers, you're ready to start building. Head over to the [Getting Started](./getting-started.md) guide for a step-by-step tutorial on setting up your first Tokio application.

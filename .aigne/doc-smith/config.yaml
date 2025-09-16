@@ -65,6 +65,8 @@ docsDir: .aigne/doc-smith/docs # Directory to save generated documentation
 sourcesPath: # Source code paths to analyze
   - ./tokio
   - ./README.md
-lastGitHead: e1cd4e814a8733b5aa025d4207a90df0c904a6be
+lastGitHead: b2fcf22c048adb4c03881c265dc7378a66a2093c
 appUrl: https://docsmith.aigne.io
 boardId: tokio
+# Checkout ID for document deployment service
+checkoutId: ""

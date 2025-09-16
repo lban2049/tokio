@@ -1,30 +1,29 @@
 # 入门指南
 
-本指南将引导你完成首个 Tokio 应用的设置。我们将从创建一个新的 Rust 项目开始，将 Tokio 添加为依赖项，然后构建一个简单的 TCP 回声服务器，该服务器会将其接收到的任何数据发回。
+本指南将引导你在几分钟内从零开始运行一个 Tokio 应用程序。我们将介绍如何设置项目以及如何构建一个可并发处理多个连接的简单 TCP 回显服务器。
 
-### 设置项目
+## 项目设置
 
-首先，我们使用 Cargo 创建一个新的 Rust 项目：
+首先，你需要在 `Cargo.toml` 文件中添加 `tokio` crate 作为依赖项。
 
-```bash Create a new project icon=lucide:terminal
-cargo new my-tokio-app
-cd my-tokio-app
-```
+在编写应用程序时，我们建议通过 `full` 标志启用所有功能。这可以确保你在构建过程中能够访问 Tokio 的所有 API，而不会遇到障碍。
 
-接下来，在 `Cargo.toml` 文件中添加 `tokio` crate 作为依赖项。我们将使用 `full` 功能标志启用所有功能。这是最简单的入门方式，可以确保你所需的所有 API 都可用。
+将以下内容添加到你的 `Cargo.toml` 中：
 
-```toml Cargo.toml icon=lucide:file-text
+```toml Cargo.toml icon=logos:rust
 [dependencies]
 tokio = { version = "1", features = ["full"] }
 ```
 
-### 编写回声服务器
+## 一个基本的 TCP 回显服务器
 
-现在，将 `main.rs` 文件的内容替换为以下代码。该程序将设置一个在 `127.0.0.1:8080` 上监听的服务器，并为每个传入的连接读取数据，然后将相同的数据写回客户端。
+让我们构建一个简单的服务器，它能接受传入的 TCP 连接，并将其接收到的任何数据发回。这是一个经典的例子，展示了 Tokio 的核心功能：异步 I/O 和并发任务管理。
+
+创建一个新文件 `src/main.rs` 并添加以下代码：
 
 ```rust main.rs icon=logos:rust
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -36,7 +35,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tokio::spawn(async move {
             let mut buf = [0; 1024];
 
-            // 在循环中，从套接字读取数据并将数据写回。
+            // 在循环中，从套接字读取数据并将其写回。
             loop {
                 let n = match socket.read(&mut buf).await {
                     // 套接字已关闭
@@ -59,38 +58,40 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-我们来分解一下这段代码：
+## 代码解读
 
--   `#[tokio::main]`: 这是一个宏，它将 `async fn main()` 转换为一个同步的 `main()` 函数，该函数会初始化一个 Tokio 运行时并执行异步代码。
--   `TcpListener::bind("127.0.0.1:8080").await?`: 我们创建一个绑定到指定地址的 TCP 监听器。使用 `.await` 关键字是因为绑定是一个异步操作。
--   `loop { ... }`: 服务器进入一个循环，以持续接受新的连接。
--   `listener.accept().await?`: 这会异步地等待一个新的入站连接。当连接建立时，它会返回一个包含套接字和对端地址的元组。
--   `tokio::spawn(async move { ... });`: 对于每个连接，都会生成一个新任务。这使得服务器能够并发处理多个连接。`move` 关键字将 `socket` 的所有权转移给新任务。
--   `socket.read(&mut buf).await`: 在任务内部，我们从套接字读取数据到缓冲区。这是另一个异步操作，所以我们使用 `.await` 等待它完成。
--   `socket.write_all(&buf[0..n]).await`: 我们将刚刚读取的数据写回套接字，从而实现“回声”效果。
+让我们来分析一下代码中发生了什么：
 
-### 运行服务器
+1.  **`#[tokio::main]`**：这是一个宏，用于设置 Tokio 运行时。它将 `async fn main()` 转换为一个同步的 `main` 函数，该函数会初始化运行时并执行其中的异步代码。
 
-代码就绪后，你可以在终端中运行服务器：
+2.  **`TcpListener::bind("127.0.0.1:8080").await?`**：我们创建一个 `TcpListener` 并将其绑定到 8080 端口。这是一个异步操作，因此我们使用 `.await` 等待其完成。
 
-```bash Run the application icon=lucide:terminal
+3.  **`listener.accept().await?`**：`loop` 循环持续调用 `accept()`。每次调用 `accept()` 都会异步等待一个新的传入连接。当客户端连接时，它会返回一个新的 `TcpStream`（即我们的 `socket`）和客户端的地址。
+
+4.  **`tokio::spawn(async move { ... })`**：为了并发处理多个客户端，我们为每个传入的连接生成一个新的异步任务。`tokio::spawn` 函数接受一个 `async` 代码块，并在 Tokio 运行时上运行它，而不会阻塞主循环。这使得 `loop` 循环可以立即返回并等待下一个连接。
+
+5.  **`socket.read(...)` 和 `socket.write_all(...)`**：在生成的任务内部，我们重复地从客户端读取数据到缓冲区，然后将相同的数据写回客户端。这就是“回显”逻辑。这两个都是异步操作，因此它们都用 `.await` 标记。
+
+## 运行服务器
+
+现在，你可以从终端运行该应用程序：
+
+```sh
 cargo run
 ```
 
-服务器现已运行。要进行测试，请打开一个新的终端窗口，并使用 `netcat` 或 `telnet` 等工具连接到它。
+服务器将启动并监听 `127.0.0.1:8080` 上的连接。
 
-```bash Test with netcat icon=lucide:terminal
-nc 127.0.0.1 8080
+要进行测试，请打开一个新的终端窗口，并使用像 `telnet` 或 `netcat` 这样的工具进行连接：
+
+```sh
+telnet 127.0.0.1 8080
 ```
 
-连接后，输入任意消息并按回车键，你将看到同样的消息被回显回来。要停止服务器，请返回第一个终端并按 `Ctrl+C`。
+连接后，你输入的任何内容都将被服务器回显给你。你甚至可以打开多个终端窗口并同时连接，以观察并发处理的实际效果。
 
-恭喜！你已经使用 Tokio 构建了你的第一个异步应用。
+## 后续步骤
 
-### 后续步骤
+恭喜！你已成功使用 Tokio 构建并运行了你的第一个异步应用程序。你已经了解了如何设置项目、执行非阻塞 I/O 以及使用任务处理并发操作。
 
-既然你已经运行了一个基础应用，就可以开始深入了解 Tokio 的基本构建块了。
-
-<x-card data-title="核心概念" data-icon="lucide:puzzle" data-href="/concepts" data-cta="探索概念">
-深入了解任务、I/O、状态管理和运行时本身，以理解 Tokio 的底层工作原理。
-</x-card>
+要深入了解 Tokio 如何管理这些并发操作，请参阅 [任务与调度](./tasks-scheduling.md) 指南。
