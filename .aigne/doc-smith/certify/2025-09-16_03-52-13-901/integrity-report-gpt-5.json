@@ -1,0 +1,857 @@
+{
+  "timestamp": "2025-09-16T03:52:13.901Z",
+  "metadata": {
+    "version": "1.0.0",
+    "generatedBy": "doc-smith",
+    "documentCount": 19
+  },
+  "structureEvaluation": {
+    "type": "document-structure",
+    "results": {
+      "purposeCoverage": {
+        "score": 4,
+        "reason": "覆盖“快速上手”与“完成特定任务”的核心路径：/getting-started（项目搭建+TCP echo 示例）、/overview（入门认知）；以及一组以任务为导向的主题：/tasks-scheduling/*（任务、同步、定时、运行时）与 /io/*（网络、文件、子进程、信号）。但“快速查找答案”仅部分满足，虽然 /configuration/*（Feature Flags、平台支持、Unstable）与 /tasks-scheduling/runtime、/io 概览可作为参考入口，仍缺少集中且可检索的 API 参考/索引、Cookbook（按任务索引）、FAQ/故障排查、错误指南，影响高频检索与定位效率。",
+        "covered": [
+          "Get started quickly",
+          "Complete specific tasks"
+        ],
+        "missing": [
+          "Find answers fast"
+        ]
+      },
+      "audienceCoverage": {
+        "score": 4,
+        "reason": "面向“集成型开发者”的内容较到位：/getting-started 提供可复制示例；/tasks-scheduling/* 与 /io/* 基于场景（spawn、同步、超时、TCP/UDP、FS、进程、信号）可直接落地；/configuration/*（Feature Flags、平台支持）支撑依赖裁剪与环境兼容。但缺少常见生态集成与最佳实践：如与 hyper/reqwest/tonic、数据库驱动、TLS 的整合示例；测试与调试（tokio::test、tracing）、性能与背压、取消与优雅退出的任务级指南未单列，削弱“拿来即用”的完整链路。",
+        "covered": [
+          "Developers integrating your product/API"
+        ]
+      },
+      "coverageDepthAlignment": {
+        "score": 4,
+        "reason": "整体深度接近“平衡覆盖”：从概览与快速上手到任务/IO/配置的中等深度指南，避免过多内部实现；但部分章节偏概念而非分步操作，且缺少 Cookbook 索引、API 快速参考与故障排查，导致“查找答案”与“实操路径”略显不足，整体轻微偏浅。"
+      }
+    }
+  },
+  "documentEvaluations": {
+    "type": "document-content",
+    "individual": [
+      {
+        "documentInfo": {
+          "path": "/overview",
+          "title": "Overview"
+        },
+        "evaluation": {
+          "readability": {
+            "score": 5,
+            "reason": "语言清晰流畅、无明显语病；层次分明（概述-组件-示例-后续），代码示例注释简洁明了，读者无需回读即可理解。"
+          },
+          "coherence": {
+            "score": 5,
+            "reason": "结构与叙述顺序合理，核心概念与示例相互呼应，结尾指向“入门”形成闭环，无矛盾或跳跃。"
+          },
+          "contentQuality": {
+            "score": 5,
+            "reason": "规划点基本全覆盖：特性（快/可靠/可扩展）、核心组件（任务、I/O、运行时含调度器/反应器/计时器），并提供可运行的回显示例与后续链接，信息准确。"
+          },
+          "translationQuality": {
+            "score": 5,
+            "reason": "翻译忠实自然，术语统一（如“零成本抽象”“工作窃取”“非阻塞 I/O”），语序贴合中文习惯，无明显生硬或遗漏。"
+          },
+          "consistency": {
+            "score": 5,
+            "reason": "术语与风格前后一致（异步、运行时、I/O 等），格式统一；中英链接文本与路径匹配，代码块与说明对应良好。"
+          },
+          "purposeAlignment": {
+            "score": 3,
+            "reason": "相对“快速开始”目标仅部分满足：虽有示例与下一步指引，但缺少从零到可运行的关键步骤（Cargo.toml 依赖、Tokio 特性启用、Rust 版本要求、构建/运行命令）。建议补充安装与最小可用配置步骤清单。"
+          },
+          "audienceAlignment": {
+            "score": 4,
+            "reason": "面向开发者的代码示例与 API 概览到位，但缺少可复制的配置片段与常见模式（如 Cargo.toml、特性标记、错误处理/超时模式），对“集成到项目”场景略显不足。"
+          },
+          "knowledgeLevelAlignment": {
+            "score": 4,
+            "reason": "深度适中，假设读者具备异步/网络基础；但对“从类似工具迁移”的读者缺少差异点/对比（如与 async-std/Node.js 的差异）。建议增加“Coming from X”简表与迁移注意事项。"
+          }
+        }
+      },
+      {
+        "documentInfo": {
+          "path": "/getting-started",
+          "title": "Getting Started"
+        },
+        "evaluation": {
+          "readability": {
+            "score": 5,
+            "reason": "行文简洁流畅，术语使用准确，代码与命令块清晰可读；中英两版均自然，无明显语法或拼写问题。"
+          },
+          "coherence": {
+            "score": 5,
+            "reason": "结构从项目设置→示例→代码解读→运行与测试→后续步骤，层次清楚、前后呼应，无矛盾或跳跃。"
+          },
+          "contentQuality": {
+            "score": 4,
+            "reason": "可直接复制代码运行并验证效果，满足“从零到可运行”。但缺少前置条件与完整步骤（未说明安装 Rust/cargo、未包含 `cargo new` 创建项目、不同平台测试工具如 netcat 的替代），可能导致新手在环境或工具上受阻。"
+          },
+          "translationQuality": {
+            "score": 5,
+            "reason": "译文忠实原文、术语统一（如“异步 I/O”“并发任务”），语序自然；代码内英文日志保留合理，不影响理解。"
+          },
+          "consistency": {
+            "score": 5,
+            "reason": "术语、风格与格式统一；标题层级规范，代码片段与叙述风格一致；中英内容对应良好。"
+          },
+          "purposeAlignment": {
+            "score": 5,
+            "reason": "紧扣“快速开始”，直达可运行示例与测试方法，无冗余背景或过深理论。"
+          },
+          "audienceAlignment": {
+            "score": 5,
+            "reason": "面向开发者的代码优先呈现，示例可复制粘贴，讲解聚焦 API 与运行步骤，技术取向合适。"
+          },
+          "knowledgeLevelAlignment": {
+            "score": 3,
+            "reason": "深度偏入门，未针对“用过类似工具”的读者提供差异/迁移提示（如与 async-std 或标准线程对比、Tokio 运行时与 feature 选择建议、避免阻塞等），对该层级读者略浅。"
+          }
+        }
+      },
+      {
+        "documentInfo": {
+          "path": "/tasks-scheduling",
+          "title": "Tasks & Scheduling"
+        },
+        "evaluation": {
+          "readability": {
+            "score": 4,
+            "reason": "语言清晰流畅、技术叙述准确，代码示例易读可复制。少量英文代码块标题未译（如 “Awaiting a JoinHandle”等），个别句子偏长。建议：统一翻译代码块标题，适度拆分长句。"
+          },
+          "coherence": {
+            "score": 4,
+            "reason": "整体从概览到运行时、任务、同步、时间的层次推进清晰，前后呼应良好。少量导航与链接衔接不完全一致（相对/绝对路径混用，末尾“下一步”指向不一）。建议：统一链接路径风格与导航落点。"
+          },
+          "contentQuality": {
+            "score": 5,
+            "reason": "核心规划点（任务生成与管理、同步原语、时间控制、运行时）覆盖全面且准确，包含 spawn/spawn_blocking/spawn_local、JoinHandle/JoinSet、通道（oneshot/mpsc/broadcast/watch）、Mutex/RwLock/Semaphore/Barrier/Notify、sleep/interval/timeout 等，配有可运行示例。可进一步补充 select!/join! 对比、取消与资源清理等常见陷阱，但不影响主线目标。"
+          },
+          "translationQuality": {
+            "score": 4,
+            "reason": "译文整体忠实自然、术语基本正确。存在“spawn”译为“派生/生成”混用、少量代码块标题仍为英文。建议：统一术语（推荐“生成任务”），补齐英文标题翻译。"
+          },
+          "consistency": {
+            "score": 3,
+            "reason": "术语与格式存在多处不一致：如“派生/生成”“运行时/Runtime”混用；代码块标题中英混排；链接风格混用（/tasks-scheduling/spawning 与 ./tasks-scheduling-spawning.md）。建议：制定术语表统一用词，统一代码块标题语言与链接风格。"
+          },
+          "purposeAlignment": {
+            "score": 5,
+            "reason": "与“完成具体任务/快速查找”高度契合：卡片化入口+分主题细化，示例以实操为导向，无冗余理论铺垫。"
+          },
+          "audienceAlignment": {
+            "score": 5,
+            "reason": "面向集成型开发者的代码优先风格，API 与配置示例充分，示例可直接复制运行，满足工程实践需求。"
+          },
+          "knowledgeLevelAlignment": {
+            "score": 4,
+            "reason": "深度总体匹配有经验读者：除基础外涵盖 LocalSet、JoinSet、MissedTickBehavior、Builder 配置等中高级主题。略缺“来自其他工具的对比/迁移”内容。建议：增设简短“来自 Go/Kotlin/async-std 的读者须知/差异点”小节。"
+          }
+        }
+      },
+      {
+        "documentInfo": {
+          "path": "/tasks-scheduling/spawning",
+          "title": "Spawning & Managing Tasks"
+        },
+        "evaluation": {
+          "readability": {
+            "score": 5,
+            "reason": "语言清晰流畅，术语准确，示例与说明紧密对应，基本无语病或歧义，阅读顺滑。"
+          },
+          "coherence": {
+            "score": 5,
+            "reason": "结构由“spawn→JoinHandle→取消→spawn_blocking→spawn_local→JoinSet→yield_now→总结”逐步展开，前后呼应，无矛盾与跳跃。"
+          },
+          "contentQuality": {
+            "score": 4,
+            "reason": "覆盖规划点（spawn/spawn_local/spawn_blocking、JoinHandle、JoinSet）并配有可运行示例与关键注意事项（如 spawn_blocking 不可中止、JoinSet drop 自动中止）。扣分点：英文示例 my_background_op 的字符串常量在代码中断行，存在编译风险；JoinSet 的错误处理（JoinError/JoinResult）与返回类型说明略简略。改进建议：修正示例字符串断行；在 JoinSet 小节补充错误分支示例；在 JoinHandle 小节补充“丢弃句柄与任务生命周期”的说明。"
+          },
+          "translationQuality": {
+            "score": 4,
+            "reason": "整体忠实自然，技术术语统一，代码注释与说明清楚。小问题：若干代码块标题未译（如“Spawning a connection handler”），表格标题仍为英文；中文版本修正了英文示例中的断行错误，虽改善可读性但与原文不完全一致。建议：统一翻译代码块与表格标题，并在保真与可运行之间标注差异。"
+          },
+          "consistency": {
+            "score": 4,
+            "reason": "术语大体统一（任务、future、JoinHandle、JoinSet 等），格式与风格一致。细微不一致：表格标题仍用英文；“生成/创建/产生任务”表述偶有切换；个别代码块标题保留英文。建议统一术语与标题语言。"
+          },
+          "purposeAlignment": {
+            "score": 5,
+            "reason": "高度契合“完成特定任务”的目标：围绕并发任务管理的常见场景给出直接可用的步骤与示例，聚焦实操，无冗余理论。"
+          },
+          "audienceAlignment": {
+            "score": 5,
+            "reason": "面向开发者，代码优先、API 明确、可复制粘贴；示例紧贴真实工程场景（TCP、取消、阻塞隔离、!Send、本地执行）。"
+          },
+          "knowledgeLevelAlignment": {
+            "score": 5,
+            "reason": "深度与难度与“用过类似工具的新用户”匹配：强调 Tokio 特有要求（'static + Send）、取消语义、阻塞隔离、JoinSet 行为等；不过度科普基础，也未一味深挖内部实现。"
+          }
+        }
+      },
+      {
+        "documentInfo": {
+          "path": "/tasks-scheduling/synchronization",
+          "title": "Synchronization Primitives"
+        },
+        "evaluation": {
+          "readability": {
+            "score": 5,
+            "reason": "行文清晰流畅，术语使用自然准确，代码示例可直接阅读与复制；仅极少数代码块信息行含英文说明，不影响整体理解。"
+          },
+          "coherence": {
+            "score": 5,
+            "reason": "结构由总述—分类—示例—下一步的层次推进，前后呼应无矛盾，概念解释与示例匹配良好。"
+          },
+          "contentQuality": {
+            "score": 4,
+            "reason": "覆盖 oneshot/mpsc/broadcast/watch 的核心用法并提供可运行示例，解释背压与丢失消息等要点；但状态同步部分仅卡片概述，缺少 Mutex/RwLock/Semaphore/Barrier/Notify/OnceCell 的示例与最佳实践，也未提示常见陷阱（如在 .await 期间持锁、std::sync 与 Tokio 原语差异）。建议补充可复制代码、错误处理与用法对比。"
+          },
+          "translationQuality": {
+            "score": 5,
+            "reason": "译文忠实自然，术语统一（如“通道”“背压”“恐慌”）；个别代码块标题保留英文不影响理解。"
+          },
+          "consistency": {
+            "score": 4,
+            "reason": "术语与格式基本统一；少量中英文混用（代码块标题“Example: …”）、“生成/spawn”表述未统一。建议统一代码块标题语言，并在首次出现时中英并列术语。"
+          },
+          "purposeAlignment": {
+            "score": 4,
+            "reason": "与“快速上手/完成常见任务”目标基本契合：通道部分示例完整，读者可快速实践；但状态同步缺示例与步骤，降低了从零到工作的连贯性。建议补齐状态同步实战段落。"
+          },
+          "audienceAlignment": {
+            "score": 4,
+            "reason": "面向开发者的代码优先写作，示例可复制；但缺少更细的 API 入口、容量与错误类型速查、进一步链接（文档/参考）。建议在各节补充 API 链接与常见返回类型说明。"
+          },
+          "knowledgeLevelAlignment": {
+            "score": 3,
+            "reason": "对“用过类似工具”的读者，文档偏基础，缺少与 std::sync、crossbeam 或 async-std 的差异、迁移提示、性能/语义对比及边界条件。建议新增“来自 X 的对比/迁移”与注意事项小节。"
+          }
+        }
+      },
+      {
+        "documentInfo": {
+          "path": "/tasks-scheduling/time",
+          "title": "Time, Delays, and Timeouts"
+        },
+        "evaluation": {
+          "readability": {
+            "score": 5,
+            "reason": "语言自然流畅、技术术语使用准确，段落层次清晰；示例可直接复制运行，基本无需回读。"
+          },
+          "coherence": {
+            "score": 4,
+            "reason": "结构由简介→Sleep→Interval→Timeout 递进清晰；少量瑕疵：timeout 示例中引入了未使用的 oneshot，结尾卡片链接与文中相对链接风格不一致，轻微干扰连贯性。"
+          },
+          "contentQuality": {
+            "score": 4,
+            "reason": "完整覆盖 sleep/interval/timeout 的核心用法，含关键注意事项（运行时需启用计时器、MissedTickBehavior、reset 重用计时器），示例可操作；但缺少 timeout 失败后任务取消语义与取消安全提示、sleep_until 示例、测试中“暂停时间”相关提示等实用细节。"
+          },
+          "translationQuality": {
+            "score": 5,
+            "reason": "中文译文忠实自然、术语统一（future、runtime、pin、tick 等），语序与措辞符合中文习惯，仅个别英文术语保留（如 pinned）亦符合技术写作常见风格。"
+          },
+          "consistency": {
+            "score": 4,
+            "reason": "术语与代码风格基本统一；小的不一致：未使用的 oneshot 导入、原文与卡片的运行时链接路径/格式不一致，中文小节标题中英混排（如“Sleep Future”）略显风格不一。"
+          },
+          "purposeAlignment": {
+            "score": 5,
+            "reason": "高度契合“完成特定任务”：围绕延迟、周期执行与超时的常见工作流给出直接示例与注意事项，聚焦实操。"
+          },
+          "audienceAlignment": {
+            "score": 5,
+            "reason": "面向开发者、代码优先，示例最小可运行，包含配置要点（enable_all/enable_time），满足集成场景需求。"
+          },
+          "knowledgeLevelAlignment": {
+            "score": 5,
+            "reason": "面向熟悉异步概念的读者，提供适度进阶点（reset、MissedTickBehavior），不过度铺垫基础也未过深，难度契合。"
+          }
+        }
+      },
+      {
+        "documentInfo": {
+          "path": "/tasks-scheduling/runtime",
+          "title": "The Runtime"
+        },
+        "evaluation": {
+          "readability": {
+            "score": 5,
+            "reason": "语言清晰流畅、结构分明，示例与解释紧密配合；改进：在 Quick Start 增补一行 Cargo.toml 依赖声明以降低跳出成本。"
+          },
+          "coherence": {
+            "score": 5,
+            "reason": "从宏到手动配置、再到调度器/句柄/核心操作/关闭，节奏与层次清晰，无明显自相矛盾；可在“核心操作”与前文 API 处增加交叉链接以便跳转。"
+          },
+          "contentQuality": {
+            "score": 4,
+            "reason": "覆盖了运行时、调度器、Builder、Handle、核心操作与关闭，示例可直接使用；扣分点：缺少 Cargo.toml 最小特性示例（如 macros、net、rt-multi-thread/time）、未强调避免在异步上下文中使用 block_on、Shutdown 对“优雅终止”表述略笼统。改进：补充依赖与最小 features、给出 current-thread vs multi-thread 选择指引与表格、明确普通异步任务在 drop 时会被取消而阻塞任务默认被等待。"
+          },
+          "translationQuality": {
+            "score": 4,
+            "reason": "整体忠实自然；少量未译短语（如“From an existing Runtime/From within a task”）与个别英文代码注释保留，术语“驱动/驱动程序”轻微混用。改进：补齐未译内容并统一术语为“驱动器”或“驱动”。"
+          },
+          "consistency": {
+            "score": 4,
+            "reason": "风格与格式基本统一；存在 1–2 处术语与措辞不一致（如“生成/创建”任务、“驱动/驱动程序”），代码注释中英混用。改进：建立术语表统一替换，代码注释统一为中文或英文。"
+          },
+          "purposeAlignment": {
+            "score": 5,
+            "reason": "高度契合“完成特定任务/工作流”的目标：展示如何启动、配置、选择调度器与关闭运行时，配有可复制示例；可选改进：在 Quick Start 前增加“安装与前置条件”。"
+          },
+          "audienceAlignment": {
+            "score": 5,
+            "reason": "面向集成场景的开发者，代码优先、API 明确、配置示例充分；改进：补充常见配置模板与线程数经验法则。"
+          },
+          "knowledgeLevelAlignment": {
+            "score": 5,
+            "reason": "深度匹配“用过类似工具”的读者，聚焦 Tokio 特性（调度器、Handle、Builder、关闭语义），避免过度入门化。改进：在“选择调度器”处列出典型适用场景与迁移注意事项。"
+          }
+        }
+      },
+      {
+        "documentInfo": {
+          "path": "/io",
+          "title": "Asynchronous I/O"
+        },
+        "evaluation": {
+          "readability": {
+            "score": 4,
+            "reason": "语言整体清晰流畅、术语准确，示例易读；但存在少量拼写问题（多处将 async 误写为 asyn）与中英标题混排，影响少许阅读连贯性。建议统一修正拼写与标题语言。"
+          },
+          "coherence": {
+            "score": 4,
+            "reason": "主线从概念→示例→实现者方法→缓冲→资源→后续步骤，层次清楚；但翻译部分混入多个独立主题页（FS/Networking/Process/Signals），跨页切换略显突兀。建议在页面开头标注范围或拆分为独立文档。"
+          },
+          "contentQuality": {
+            "score": 5,
+            "reason": "围绕 AsyncRead/AsyncWrite、扩展 trait、BufReader/BufWriter 提供了核心说明与可运行示例，并指向相关 I/O 资源，基本覆盖规划目标。可进一步补充常见陷阱（如半关闭、背压）以更完善。"
+          },
+          "translationQuality": {
+            "score": 3,
+            "reason": "“异步 I/O”章节译文忠实自然、术语统一，但其他中文页存在明显问题：多处将 async 误写为 asyn；文件系统页称 tokio::fs::File 内部缓冲并需 flush 的表述可能不准确、易误导。建议纠正拼写并核实/修正 File 缓冲与 flush 描述。"
+          },
+          "consistency": {
+            "score": 3,
+            "reason": "术语总体一致（AsyncRead/AsyncWrite/BufReader 等），但存在多处 async 拼写不一致、代码块标题与语言中英混用；跨页对写入缓冲（File vs BufWriter）的表述不一致。建议统一拼写与格式，并澄清缓冲责任归属。"
+          },
+          "purposeAlignment": {
+            "score": 4,
+            "reason": "对“快速开始/完成常见任务”较友好，示例可复制运行并直达要点；但缺少依赖安装、运行环境与项目初始化步骤，略影响“30 分钟内从零到运行”。建议补充 Cargo 依赖与最小工程指引。"
+          },
+          "audienceAlignment": {
+            "score": 4,
+            "reason": "面向开发者的代码优先呈现、API 清晰，基本符合工程师需求；但代码错拼影响复制即用体验。建议提供可直接运行的完整片段并通过 CI 校验示例。"
+          },
+          "knowledgeLevelAlignment": {
+            "score": 4,
+            "reason": "深度适中，假定读者具备 Rust/异步背景；对“来自相似工具”的差异与迁移提示较少。建议增加与 std::io/其他 runtime 的对比与注意事项，提升针对性。"
+          }
+        }
+      },
+      {
+        "documentInfo": {
+          "path": "/io/networking",
+          "title": "Networking"
+        },
+        "evaluation": {
+          "readability": {
+            "score": 4,
+            "reason": "语言清晰流畅、结构简单易读；但多处代码存在拼写错误（asyn 应为 async），属于显著但易修复的小错误。"
+          },
+          "coherence": {
+            "score": 5,
+            "reason": "从概览到 TCP/UDP/UDS 再到平台特定类型的递进结构合理，各段落前后呼应、无矛盾。"
+          },
+          "contentQuality": {
+            "score": 4,
+            "reason": "覆盖了规划中的核心类型与基本用法并提供示例，准确度高；但示例含编译错误（async 拼写），缺少 Cargo.toml 依赖/特性说明与运行指引，TCP/UDP 未展示读取/错误处理等最小可用闭环。"
+          },
+          "translationQuality": {
+            "score": 5,
+            "reason": "译文忠实自然、术语一致（如“Unix 域套接字”“对等节点”），问题主要来自原文示例的拼写错误。"
+          },
+          "consistency": {
+            "score": 5,
+            "reason": "术语与 API 名称使用统一，代码块标注风格一致，无格式混乱。"
+          },
+          "purposeAlignment": {
+            "score": 4,
+            "reason": "与“完成特定任务”较匹配：提供常见工作流示例（TCP 监听/连接、UDP 回显、UDS 概览）；但缺少一步步操作与环境准备，使落地性稍弱。"
+          },
+          "audienceAlignment": {
+            "score": 3,
+            "reason": "目标为开发者且以代码为主符合预期，但缺少依赖与特性启用示例（Cargo.toml），并且示例不可直接复制运行（async 拼写错误），影响“代码即用”。"
+          },
+          "knowledgeLevelAlignment": {
+            "score": 4,
+            "reason": "深度适合有相关经验的读者，涵盖 AsyncRead/AsyncWrite 等关键点；但缺少与 std::net 的差异/迁移提示与 Tokio 特有配置要点总结。"
+          }
+        }
+      },
+      {
+        "documentInfo": {
+          "path": "/io/fs",
+          "title": "Filesystem"
+        },
+        "evaluation": {
+          "readability": {
+            "score": 5,
+            "reason": "语言清晰流畅，结构简洁，代码示例可直接复制；少量英文代码注释与图标标记不影响阅读。"
+          },
+          "coherence": {
+            "score": 5,
+            "reason": "从原理说明到快速入门、进阶用法、性能调优、OpenOptions 再到其他操作，层次分明、前后呼应，无明显跳跃或自相矛盾。"
+          },
+          "contentQuality": {
+            "score": 4,
+            "reason": "覆盖面完整（整文件读写、File 进阶、缓冲、OpenOptions、目录等），示例可运行价值高。但存在关键准确性问题：文中称“Tokio 的 File 内部缓冲写入，需要 flush 才真正写入 OS”，与实际行为不符，易误导；正确做法应说明普通 File 通常不做用户态缓冲，flush 多为 no-op，若需聚合写入应使用 BufWriter；若需落盘保证应使用 sync_all/sync_data。另缺少最小可运行示例（#[tokio::main] 与 Cargo.toml features），建议补充以提升“开箱即用”。"
+          },
+          "translationQuality": {
+            "score": 5,
+            "reason": "翻译忠实自然，术语统一（spawn_blocking、BufWriter、OpenOptions 等保留英文专名），行文通顺；个别英文注释/标记保留不影响理解。"
+          },
+          "consistency": {
+            "score": 5,
+            "reason": "术语与格式统一（File/BufReader/BufWriter、read/write/flush 等一致），代码与描述相互印证；模块与链接命名风格一致。"
+          },
+          "purposeAlignment": {
+            "score": 5,
+            "reason": "与“完成具体任务”目标高度一致：围绕常见文件 I/O 场景提供分步示例与实践建议；虽对“快速开始”略缺安装配置步骤，但对本目标不构成影响。"
+          },
+          "audienceAlignment": {
+            "score": 5,
+            "reason": "面向开发者的代码优先风格，API 精准、示例可复制，避免冗长背景；符合工程集成需求。"
+          },
+          "knowledgeLevelAlignment": {
+            "score": 5,
+            "reason": "假定读者具备异步与文件 I/O 基础，重点突出 Tokio 的差异点（无原生 async FS、线程池卸载、缓冲与性能策略），深度和难度匹配“用过类似工具”的读者。"
+          }
+        }
+      },
+      {
+        "documentInfo": {
+          "path": "/io/process",
+          "title": "Child Processes"
+        },
+        "evaluation": {
+          "readability": {
+            "score": 4,
+            "reason": "语言清晰流畅、示例易读，但首个示例中 expect 字符串出现意外换行（\"failed to spawn\\n        \"），个别小瑕疵影响微弱。建议修正字符串换行并统一代码注释标点风格。"
+          },
+          "coherence": {
+            "score": 5,
+            "reason": "结构由概念→基础→I/O 管道→进程管理→注意事项→后续步骤，层次清晰、前后呼应，无逻辑矛盾。"
+          },
+          "contentQuality": {
+            "score": 4,
+            "reason": "覆盖了 spawn/wait、output、管道读写、命令间管道、Child 管理、kill_on_drop、僵尸进程等核心场景，示例可复制运行。但对 Child::kill 的描述可能不准确（通常不等待进程退出），示例中 kill 后未显式 wait；缺少常见配置如 env/current_dir、超时与取消（tokio::time::timeout）、跨平台差异与陷阱说明。建议：更正 kill 语义并在示例中在 kill 后调用 wait；补充设置环境变量与工作目录示例；新增超时/取消模式及 Windows/Unix 差异注意事项。"
+          },
+          "translationQuality": {
+            "score": 5,
+            "reason": "翻译忠实原文、术语统一（如“子进程”“句柄”“管道”），语句自然流畅；代码注释与说明一致未丢失含义。"
+          },
+          "consistency": {
+            "score": 5,
+            "reason": "术语与风格统一（spawn/生成、句柄/handle、管道/piped），章节格式一致；示例命名与叙述一致。"
+          },
+          "purposeAlignment": {
+            "score": 5,
+            "reason": "与“完成具体任务”高度契合：按场景分块、每节有可运行示例，直接指导常见工作流；亦兼顾查询式参考。"
+          },
+          "audienceAlignment": {
+            "score": 5,
+            "reason": "面向开发者，代码优先、可复制；API 与用法直达要点，配有必要的注意事项与断言。"
+          },
+          "knowledgeLevelAlignment": {
+            "score": 4,
+            "reason": "对有相关经验读者友好，避免过多基础解释；但可再增加“与 std::process 的差异/迁移提示”、背压与大输出处理、错误处理与超时策略等进阶细节以更贴合中高级读者。"
+          }
+        }
+      },
+      {
+        "documentInfo": {
+          "path": "/io/signals",
+          "title": "OS Signals"
+        },
+        "evaluation": {
+          "readability": {
+            "score": 5,
+            "reason": "语言简洁、结构清晰、示例可复制，几乎无语法/拼写问题，阅读流畅。"
+          },
+          "coherence": {
+            "score": 5,
+            "reason": "从通用概念到 Unix/Windows 分节、示例与注意事项递进合理，前后呼应，无明显矛盾或跳跃。"
+          },
+          "contentQuality": {
+            "score": 4,
+            "reason": "覆盖跨平台信号监听、常见信号、重要注意事项与可用示例，基本可直接使用。扣分点：未给出 Cargo.toml 依赖与 features（如 tokio 的 signal、macros、rt）启用说明；缺少整合多信号/任务的优雅关闭示例（如 tokio::select!）；Windows 事件行为边界未说明。建议：补充最小可运行配置片段与 tokio::select! 综合示例，并标注平台差异与常见陷阱。"
+          },
+          "translationQuality": {
+            "score": 4,
+            "reason": "整体忠实自然，术语大多统一。小问题：'Ctrl-C/CTRL-C/Ctrl+C' 表述混用；个别用词略直译（'通知'/'事件'切换）。建议统一为 'Ctrl+C' 并微调少数句式使更地道。"
+          },
+          "consistency": {
+            "score": 4,
+            "reason": "格式和术语基本一致。小出入：'Unix/类 Unix/Unix-based' 混用；'Ctrl-C/CTRL-C' 大小写不一；代码块标题标注风格略不统一。建议统一术语与大小写、示例标题命名风格。"
+          },
+          "purposeAlignment": {
+            "score": 4,
+            "reason": "与“完成特定任务”目标较匹配：示例聚焦常见用法；但对“快速上手”缺少安装/配置步骤。建议补充从 cargo init 到运行的最小步骤与依赖配置。"
+          },
+          "audienceAlignment": {
+            "score": 4,
+            "reason": "面向开发者、代码优先，示例可复制。改进空间：补充 API 参考链接、常见错误与平台限制（如 Windows 控制台事件行为）以便集成。"
+          },
+          "knowledgeLevelAlignment": {
+            "score": 4,
+            "reason": "对已有相关经验读者深度适中。改进：增加与其他方案（如 signal-hook/标准库）的差异点、Tokio 特有行为清单（永久 handler、合并策略、跨平台差异）以便迁移与比较。"
+          }
+        }
+      },
+      {
+        "documentInfo": {
+          "path": "/configuration",
+          "title": "Configuration"
+        },
+        "evaluation": {
+          "readability": {
+            "score": 5,
+            "reason": "语言自然流畅，术语使用准确，示例与表格清晰；仅个别短语略显生硬（如“派生任务”“非调度器工具”），不影响理解。"
+          },
+          "coherence": {
+            "score": 5,
+            "reason": "结构分明（配置总览/功能标志/平台支持/不稳定功能），层级与前后指涉清晰，无矛盾或跳跃。"
+          },
+          "contentQuality": {
+            "score": 5,
+            "reason": "全面覆盖特性开关、平台差异（含 WASM 稳定/不稳定）、启用 tokio_unstable 的具体方法与不稳定 API 列表，并提供可复制的 Cargo/.cargo 与环境变量示例；可进一步补充按场景的最小 feature 组合示例以优化实践性。"
+          },
+          "translationQuality": {
+            "score": 5,
+            "reason": "译文忠实准确、行文自然，术语统一（如 功能标志/运行时/宏/通道 等）；仅个别词可更口语化（如“派生任务”可改为“生成任务”）。"
+          },
+          "consistency": {
+            "score": 4,
+            "reason": "整体术语、格式基本一致；存在 1–2 处不一致：WASM 表述有时含“WebAssembly (WASM)”有时仅“WASM”；内部链接风格混用（/configuration/unstable 与 ./configuration-unstable.md）。建议统一术语与链接写法。"
+          },
+          "purposeAlignment": {
+            "score": 5,
+            "reason": "高度契合“快速查找答案/参考”与“完成具体任务（启用不稳定特性）”的目标：以表格与步骤为主、可操作性强、定位明确。"
+          },
+          "audienceAlignment": {
+            "score": 5,
+            "reason": "面向集成型开发者的需求匹配度高：代码与配置片段充足、可直接复制，无多余背景铺垫。"
+          },
+          "knowledgeLevelAlignment": {
+            "score": 5,
+            "reason": "对“用过类似工具的开发者”深度匹配：跳过基础原理，聚焦差异点与可操作配置，难度与细节恰当。"
+          }
+        }
+      },
+      {
+        "documentInfo": {
+          "path": "/configuration/features",
+          "title": "Feature Flags"
+        },
+        "evaluation": {
+          "readability": {
+            "score": 5,
+            "reason": "语言清晰自然，术语准确，示例与表格易读，无明显语法或拼写错误。"
+          },
+          "coherence": {
+            "score": 4,
+            "reason": "结构自洽（动机→使用建议→特性清单→不稳定特性），段落衔接自然；但“full 不含 tracing”与下方未列出 tracing 的表述存在轻微指代不清，易引发疑惑。"
+          },
+          "contentQuality": {
+            "score": 4,
+            "reason": "覆盖主要特性标志与应用/库场景，含可复制 Cargo 示例，信息实用；不足：未在清单中列出 tracing 特性；缺少特性依赖/组合说明（如 macros 需 rt 或 rt-multi-thread）、常见组合推荐以及平台差异提示（如 signal 在 Windows）；可补充交叉链接与更多示例。"
+          },
+          "translationQuality": {
+            "score": 4,
+            "reason": "整体忠实流畅、术语统一；个别措辞略不地道（如“spawn 任务”译为“派生任务”，建议改为“启动/创建任务”），但不影响理解。"
+          },
+          "consistency": {
+            "score": 4,
+            "reason": "术语、格式与示例基本统一；存在 1 处不一致：正文提到 full 不含 tracing，但“可用标志”表未列出 tracing。建议在表中补充 tracing 或在注释中解释其状态。"
+          },
+          "purposeAlignment": {
+            "score": 5,
+            "reason": "高度契合“快速查找答案”的参考目标：结构简明、可搜索表格与示例齐备，无冗余背景。"
+          },
+          "audienceAlignment": {
+            "score": 5,
+            "reason": "面向开发者的代码优先风格明确，提供可直接复制的 Cargo 配置片段，技术准确。"
+          },
+          "knowledgeLevelAlignment": {
+            "score": 4,
+            "reason": "深度与难度适中，适合已熟悉 Rust/Cargo 的读者；若补充与其他运行时的差异/迁移提示，将更贴合“用过类似工具”的预期。"
+          }
+        }
+      },
+      {
+        "documentInfo": {
+          "path": "/configuration/platforms",
+          "title": "Platform Support"
+        },
+        "evaluation": {
+          "readability": {
+            "score": 5,
+            "reason": "行文清晰、术语准确、排版合理（分节、列表、表格均规范），无明显语法或拼写问题，读者无需回读即可理解。"
+          },
+          "coherence": {
+            "score": 5,
+            "reason": "结构从“保证支持→其他平台→WASM（稳定/非稳定）”层层递进，前后无冲突，注意事项与功能列表相互呼应。"
+          },
+          "contentQuality": {
+            "score": 4,
+            "reason": "已完整列出官方支持平台并对 WASM 提供关键限制与注意事项，但仍缺少实操向细节：1) 各平台的最低版本/架构范围（如 glibc 版本、Windows/macOS/iOS/FreeBSD 最低版本、32/64 位架构）未明确；2) WASM 计时器支持的目标列表示例不够具体；3) 未给出 Cargo.toml 配置示例（启用特性、tokio_unstable 的用法、针对 wasm32-wasi 的配置）；4) 未明确 rt-multi-thread、spawn_blocking 等在 WASM 的不可用/限制情况；5) FromRawFd 用法缺少简单示例或链接。补充上述信息可显著提升可用性。"
+          },
+          "translationQuality": {
+            "score": 5,
+            "reason": "译文忠实原文、术语统一（如“过程宏”“计时器/定时器”“panic”等），语句自然流畅，无明显歧义。"
+          },
+          "consistency": {
+            "score": 5,
+            "reason": "术语（Tokio、WASM、WASI、mio、Wine、特性名）与格式（代码反引号、列表、标题层级）统一；中英术语并列与链接风格一致。"
+          },
+          "purposeAlignment": {
+            "score": 5,
+            "reason": "作为“Find answers fast”的参考类文档，快速回答“支持哪些平台/WASM 有何限制”，信息集中且可检索性好，基本无旁枝内容。"
+          },
+          "audienceAlignment": {
+            "score": 4,
+            "reason": "面向集成产品的开发者信息明确，但缺少代码/配置示例（Cargo.toml 特性开关、cfg 目标示例、FromRawFd 简例），对工程落地不够“可复制”。"
+          },
+          "knowledgeLevelAlignment": {
+            "score": 4,
+            "reason": "对有相关经验的读者而言深度基本合适，但仍偏概览；若补充与 mio/其他运行时的差异点、平台边界更细的版本/架构矩阵和 WASM 具体限制清单，将更契合进阶读者需求。"
+          }
+        }
+      },
+      {
+        "documentInfo": {
+          "path": "/configuration/unstable",
+          "title": "Unstable Features"
+        },
+        "evaluation": {
+          "readability": {
+            "score": 5,
+            "reason": "语言清晰直接，术语使用准确，警示与步骤分层合理；代码块可直接复制，无明显拼写或语法问题。"
+          },
+          "coherence": {
+            "score": 5,
+            "reason": "结构从背景→启用方法→功能标志→API→WASM 限制，层次清楚，前后呼应，无矛盾或跳跃。"
+          },
+          "contentQuality": {
+            "score": 4,
+            "reason": "核心目标（如何启用与可用内容）覆盖到位，但缺少少量实操细节：未提供 Windows cmd.exe 的示例命令、缺少一个最小验证示例（如使用不稳定 API 的简短代码和期望编译通过）、未提示在 workspace 场景下作用范围和一次性（单次命令）启用的注意点。建议补充这些示例与注意事项。"
+          },
+          "translationQuality": {
+            "score": 5,
+            "reason": "译文忠实原意、术语统一（不稳定、cfg、WASM/WASI、特性标志等），语句自然流畅，无明显漏译或增译。"
+          },
+          "consistency": {
+            "score": 5,
+            "reason": "术语与格式在全文内保持一致，英中对应良好；代码、表格、列表风格统一，警示语气前后一致。"
+          },
+          "purposeAlignment": {
+            "score": 5,
+            "reason": "高度贴合“完成具体任务/快速查找”的目标：给出两种启用途径、受影响特性与 API 清单，并提供背景链接。"
+          },
+          "audienceAlignment": {
+            "score": 5,
+            "reason": "面向开发者的代码优先写作，提供可复制配置与命令、路径与平台差异提示，满足集成场景需求。"
+          },
+          "knowledgeLevelAlignment": {
+            "score": 5,
+            "reason": "假设读者具备 Rust/Cargo 基础，内容聚焦关键操作与限制，深度适中，避免冗余入门解释。"
+          }
+        }
+      },
+      {
+        "documentInfo": {
+          "path": "/project",
+          "title": "Project Information"
+        },
+        "evaluation": {
+          "readability": {
+            "score": 5,
+            "reason": "语言简洁清晰、结构合理，列表与段落易读；无明显拼写或语法错误，术语使用自然。"
+          },
+          "coherence": {
+            "score": 5,
+            "reason": "信息流从概览→获取帮助→贡献→相关项目→许可证，层级清楚、前后呼应；通过卡片链接深层页面，无矛盾或跳跃。"
+          },
+          "contentQuality": {
+            "score": 4,
+            "reason": "覆盖“项目信息、求助渠道、贡献入口、生态概览、许可证”等核心点；但“发布/版本策略”仅以 Changelog 链接形式出现，缺少简述（如 LTS/MSRV/发布节奏）。建议在本页补充一段发布政策与版本支持概览并链接详情。"
+          },
+          "translationQuality": {
+            "score": 4,
+            "reason": "整体忠实自然、术语统一；存在少量细微问题：如“Discord 服务器…社区”结尾多余“社区”，个别标点/空格不统一。建议统一标点与链接说明语序，去除冗余词。"
+          },
+          "consistency": {
+            "score": 5,
+            "reason": "术语、语气与格式统一；标题与模块结构一致；链接风格一致。中英版本内容覆盖略有差异（中文版含“项目策略”扩展），建议跨语言对齐或标注差异来源。"
+          },
+          "purposeAlignment": {
+            "score": 2,
+            "reason": "与所选目的（快速开始/任务指引/全面参考）不完全匹配；当前页面定位为“门户/导航”。改进：若定位“快速开始”，补安装命令与最小可运行示例；若定位“参考”，补全索引、搜索入口与关键 API 导航。"
+          },
+          "audienceAlignment": {
+            "score": 2,
+            "reason": "目标为集成型开发者（代码优先），但文中缺少可复制的代码片段与配置示例。建议在“获取帮助/贡献”旁增加 Cargo.toml 配置与最小 Tokio 程序样例，提供常见工作流入口。"
+          },
+          "knowledgeLevelAlignment": {
+            "score": 2,
+            "reason": "面向“用过类似工具”的读者应强调差异与迁移路径；当前未提供“来自 async-std/actix 的迁移”或特性对比。建议增加“从 X 迁移”小节与 Tokio 独特特性/最佳实践链接。"
+          }
+        }
+      },
+      {
+        "documentInfo": {
+          "path": "/project/contributing",
+          "title": "Contributing & Support"
+        },
+        "evaluation": {
+          "readability": {
+            "score": 5,
+            "reason": "语句简洁流畅、无明显语法/拼写问题；结构清晰，列表与表格使用得当，几乎无需回读。"
+          },
+          "coherence": {
+            "score": 5,
+            "reason": "从“获取帮助”→“贡献”→“项目策略”层层递进，前后无矛盾，信息指向明确（文档/社区/策略）。"
+          },
+          "contentQuality": {
+            "score": 5,
+            "reason": "完全覆盖规划点：贡献指引入口、MSRV 政策与当前值、发行节奏、LTS 政策与清单、版本选择示例、社区支持渠道均具备，细节可操作。可选改进：补充安全报告/问题模板入口的直达链接。"
+          },
+          "translationQuality": {
+            "score": 5,
+            "reason": "中译内容忠实原文，术语（MSRV、LTS）统一，日期与版本号准确，表格与代码块均正确保留。"
+          },
+          "consistency": {
+            "score": 5,
+            "reason": "术语、标题层级、表格格式与链接风格统一；英中对应关系一致，示例与说明风格一致。"
+          },
+          "purposeAlignment": {
+            "score": 2,
+            "reason": "所选目标偏向“快速上手/任务步骤/API 全量参考”，而本文聚焦“贡献与支持/项目政策”，与所选目标关联度低。改进：增加快速开始最小示例、常见任务步骤索引或直达 API 参考导航。"
+          },
+          "audienceAlignment": {
+            "score": 2,
+            "reason": "目标受众为集成型开发者，期望可复制代码与配置片段；本文除 LTS 依赖声明示例外缺少代码/配置指导。改进：补充最小 Tokio 示例、features 选择指南与常见集成步骤。"
+          },
+          "knowledgeLevelAlignment": {
+            "score": 3,
+            "reason": "内容深度通用，易懂但与“用过类似工具”的读者期待（差异点、迁移指南）不匹配。改进：增加“从 async-std 迁移到 Tokio”的对比与常见坑位链接。"
+          }
+        }
+      },
+      {
+        "documentInfo": {
+          "path": "/project/changelog",
+          "title": "Changelog"
+        },
+        "evaluation": {
+          "readability": {
+            "score": 4,
+            "reason": "分节清晰、项目符号统一、术语明确，阅读流畅；英文原文偶有小拼写/用词瑕疵（如 effected/affected），篇幅较长但不影响理解。"
+          },
+          "coherence": {
+            "score": 4,
+            "reason": "按版本和日期组织，Added/Fixed/Changed 等结构稳定，前后呼应；回溯补丁（如 1.43.2）穿插在更高版本之后，属 changelog 常见做法但衔接略显不自然。"
+          },
+          "contentQuality": {
+            "score": 5,
+            "reason": "覆盖 1.0–1.47 几乎所有版本，包含 Added/Fixed/Changed/Docs/Unstable 分类与 PR 链接，细节充分且可追溯，基本满足“详细变更日志”的规划目标。"
+          },
+          "translationQuality": {
+            "score": 4,
+            "reason": "中译整体准确自然，术语统一（如“非稳定版/已修复/已更改”等）；个别措辞略生硬，且在末尾 0.2.11 处链接列表有截断现象，整体问题较小。"
+          },
+          "consistency": {
+            "score": 4,
+            "reason": "整体格式与风格一致；少量用词有“变更/已更改”混用，个别中英混排与链接标注位置不完全统一。"
+          },
+          "purposeAlignment": {
+            "score": 5,
+            "reason": "高度契合“快速查找答案/参考”的目标：按版本索引、要点分条、可搜索且有 PR 追溯链接。"
+          },
+          "audienceAlignment": {
+            "score": 4,
+            "reason": "面向开发者的信息密度与技术准确性良好，PR 链接便于深挖；但缺少示例/迁移代码片段，相比“代码优先、可复制”的预期略有不足（对 changelog 可接受）。"
+          },
+          "knowledgeLevelAlignment": {
+            "score": 5,
+            "reason": "内容默认读者具备 Rust/Tokio 背景与版本管理常识，细节深度与术语难度与目标读者（有类似工具经验的开发者）高度匹配。"
+          }
+        }
+      }
+    ],
+    "aggregated": {
+      "readability": {
+        "score": 4.7,
+        "reason": "Average from 19 documents: 语言清晰流畅、无明显语病；层次分明（概述-组件-示例-后续），代码示例注释简洁明了，读者无需回读即可理解。; 行文简洁流畅，术语使用准确，代码与命令块清晰可读；中英两版均自然，无明显语法或拼写问题。; 语言清晰流畅、技术叙述准确，代码示例易读可复制。少量英文代码块标题未译（如 “Awaiting a JoinHandle”等），个别句子偏长。建议：统一翻译代码块标题，适度拆分长句。"
+      },
+      "coherence": {
+        "score": 4.7,
+        "reason": "Average from 19 documents: 结构与叙述顺序合理，核心概念与示例相互呼应，结尾指向“入门”形成闭环，无矛盾或跳跃。; 结构从项目设置→示例→代码解读→运行与测试→后续步骤，层次清楚、前后呼应，无矛盾或跳跃。; 整体从概览到运行时、任务、同步、时间的层次推进清晰，前后呼应良好。少量导航与链接衔接不完全一致（相对/绝对路径混用，末尾“下一步”指向不一）。建议：统一链接路径风格与导航落点。"
+      },
+      "contentQuality": {
+        "score": 4.3,
+        "reason": "Average from 19 documents: 规划点基本全覆盖：特性（快/可靠/可扩展）、核心组件（任务、I/O、运行时含调度器/反应器/计时器），并提供可运行的回显示例与后续链接，信息准确。; 可直接复制代码运行并验证效果，满足“从零到可运行”。但缺少前置条件与完整步骤（未说明安装 Rust/cargo、未包含 `cargo new` 创建项目、不同平台测试工具如 netcat 的替代），可能导致新手在环境或工具上受阻。; 核心规划点（任务生成与管理、同步原语、时间控制、运行时）覆盖全面且准确，包含 spawn/spawn_blocking/spawn_local、JoinHandle/JoinSet、通道（oneshot/mpsc/broadcast/watch）、Mutex/RwLock/Semaphore/Barrier/Notify、sleep/interval/timeout 等，配有可运行示例。可进一步补充 select!/join! 对比、取消与资源清理等常见陷阱，但不影响主线目标。"
+      },
+      "translationQuality": {
+        "score": 4.5,
+        "reason": "Average from 19 documents: 翻译忠实自然，术语统一（如“零成本抽象”“工作窃取”“非阻塞 I/O”），语序贴合中文习惯，无明显生硬或遗漏。; 译文忠实原文、术语统一（如“异步 I/O”“并发任务”），语序自然；代码内英文日志保留合理，不影响理解。; 译文整体忠实自然、术语基本正确。存在“spawn”译为“派生/生成”混用、少量代码块标题仍为英文。建议：统一术语（推荐“生成任务”），补齐英文标题翻译。"
+      },
+      "consistency": {
+        "score": 4.4,
+        "reason": "Average from 19 documents: 术语与风格前后一致（异步、运行时、I/O 等），格式统一；中英链接文本与路径匹配，代码块与说明对应良好。; 术语、风格与格式统一；标题层级规范，代码片段与叙述风格一致；中英内容对应良好。; 术语与格式存在多处不一致：如“派生/生成”“运行时/Runtime”混用；代码块标题中英混排；链接风格混用（/tasks-scheduling/spawning 与 ./tasks-scheduling-spawning.md）。建议：制定术语表统一用词，统一代码块标题语言与链接风格。"
+      },
+      "purposeAlignment": {
+        "score": 4.4,
+        "reason": "Average from 19 documents: 相对“快速开始”目标仅部分满足：虽有示例与下一步指引，但缺少从零到可运行的关键步骤（Cargo.toml 依赖、Tokio 特性启用、Rust 版本要求、构建/运行命令）。建议补充安装与最小可用配置步骤清单。; 紧扣“快速开始”，直达可运行示例与测试方法，无冗余背景或过深理论。; 与“完成具体任务/快速查找”高度契合：卡片化入口+分主题细化，示例以实操为导向，无冗余理论铺垫。"
+      },
+      "audienceAlignment": {
+        "score": 4.3,
+        "reason": "Average from 19 documents: 面向开发者的代码示例与 API 概览到位，但缺少可复制的配置片段与常见模式（如 Cargo.toml、特性标记、错误处理/超时模式），对“集成到项目”场景略显不足。; 面向开发者的代码优先呈现，示例可复制粘贴，讲解聚焦 API 与运行步骤，技术取向合适。; 面向集成型开发者的代码优先风格，API 与配置示例充分，示例可直接复制运行，满足工程实践需求。"
+      },
+      "knowledgeLevelAlignment": {
+        "score": 4.1,
+        "reason": "Average from 19 documents: 深度适中，假设读者具备异步/网络基础；但对“从类似工具迁移”的读者缺少差异点/对比（如与 async-std/Node.js 的差异）。建议增加“Coming from X”简表与迁移注意事项。; 深度偏入门，未针对“用过类似工具”的读者提供差异/迁移提示（如与 async-std 或标准线程对比、Tokio 运行时与 feature 选择建议、避免阻塞等），对该层级读者略浅。; 深度总体匹配有经验读者：除基础外涵盖 LocalSet、JoinSet、MissedTickBehavior、Builder 配置等中高级主题。略缺“来自其他工具的对比/迁移”内容。建议：增设简短“来自 Go/Kotlin/async-std 的读者须知/差异点”小节。"
+      }
+    }
+  },
+  "summary": {
+    "structureScores": {
+      "purposeCoverage": 4,
+      "audienceCoverage": 4,
+      "coverageDepthAlignment": 4,
+      "average": 4
+    },
+    "documentScores": {
+      "readability": 4.7,
+      "coherence": 4.7,
+      "contentQuality": 4.3,
+      "translationQuality": 4.5,
+      "consistency": 4.4,
+      "purposeAlignment": 4.4,
+      "audienceAlignment": 4.3,
+      "knowledgeLevelAlignment": 4.1,
+      "average": 4.4
+    },
+    "overallScore": 4.2,
+    "issues": [
+      "Missing purposes: Find answers fast"
+    ]
+  }
+}

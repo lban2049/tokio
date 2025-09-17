@@ -1,0 +1,864 @@
+{
+  "timestamp": "2025-09-16T08:01:16.448Z",
+  "metadata": {
+    "version": "1.0.0",
+    "generatedBy": "doc-smith",
+    "documentCount": 19
+  },
+  "structureEvaluation": {
+    "type": "document-structure",
+    "results": {
+      "purposeCoverage": {
+        "score": 4,
+        "covered": [
+          "快速开始 - 通过 Getting Started 章节提供快速入门指南和简单示例",
+          "完成特定任务 - 任务管理、同步、I/O操作等章节提供了分步指导",
+          "快速查找答案 - 结构清晰，涵盖了大部分API和功能"
+        ],
+        "missing": [
+          "快速开始的30分钟目标可能过于乐观 - 当前结构包含太多概念",
+          "缺少常见任务的快速索引或最佳实践汇总"
+        ],
+        "reason": "覆盖了三个主要目标，但快速开始部分可能需要更精简，缺少任务驱动的快速索引会影响查找效率"
+      },
+      "audienceCoverage": {
+        "score": 4,
+        "covered": [
+          "开发者集成 - 提供了大量代码示例、配置指南和API使用说明"
+        ],
+        "missing": [
+          "缺少针对不同集成场景的专门指南（如微服务、Web应用、CLI工具）",
+          "没有提供常见集成模式的最佳实践"
+        ],
+        "reason": "基本满足开发者集成需求，有代码示例和技术细节，但缺少场景化的集成指南会增加开发者的学习成本"
+      },
+      "coverageDepthAlignment": {
+        "score": 5,
+        "reason": "深度完全符合'平衡覆盖'的要求：涵盖了核心功能和常用场景，提供了实用示例，同时避免了过度深入底层细节"
+      }
+    }
+  },
+  "documentEvaluations": {
+    "type": "document-content",
+    "individual": [
+      {
+        "documentInfo": {
+          "path": "/overview",
+          "title": "Overview"
+        },
+        "evaluation": {
+          "readability": {
+            "score": 5,
+            "reason": "语言清晰流畅，中文翻译自然，无语法错误，专业术语使用准确"
+          },
+          "coherence": {
+            "score": 5,
+            "reason": "逻辑结构清晰：概述→核心组件→示例→后续步骤，内容衔接自然，无逻辑跳跃"
+          },
+          "contentQuality": {
+            "score": 4,
+            "reason": "覆盖了规划中的主要内容（介绍、特性、核心组件），但缺少调度器和反应器的具体技术细节"
+          },
+          "translationQuality": {
+            "score": 5,
+            "reason": "翻译准确自然，术语一致（如runtime统一译为运行时），符合中文表达习惯"
+          },
+          "consistency": {
+            "score": 5,
+            "reason": "术语、格式、风格完全一致，代码示例和文档结构规范统一"
+          },
+          "purposeAlignment": {
+            "score": 5,
+            "reason": "完美匹配'快速开始'目标：30分钟内从零到运行示例，提供了可直接运行的代码"
+          },
+          "audienceAlignment": {
+            "score": 5,
+            "reason": "完全符合开发者需求：代码优先，示例可复制粘贴，技术准确，包含API使用方法"
+          },
+          "knowledgeLevelAlignment": {
+            "score": 5,
+            "reason": "适合有类似工具经验的读者：突出Tokio独特优势，跳过基础概念，强调与其他框架的差异"
+          }
+        }
+      },
+      {
+        "documentInfo": {
+          "path": "/getting-started",
+          "title": "Getting Started"
+        },
+        "evaluation": {
+          "readability": {
+            "score": 5,
+            "reason": "语言清晰流畅，无语法错误，句子结构自然，专业术语使用准确"
+          },
+          "coherence": {
+            "score": 5,
+            "reason": "逻辑层次分明，从项目设置到代码实现再到运行测试，步骤清晰连贯"
+          },
+          "contentQuality": {
+            "score": 5,
+            "reason": "完整实现快速入门目标，提供可运行代码示例，包含详细代码解读"
+          },
+          "translationQuality": {
+            "score": 5,
+            "reason": "翻译准确自然，术语统一，符合中文技术文档习惯"
+          },
+          "consistency": {
+            "score": 5,
+            "reason": "术语、格式、代码风格完全一致，markdown格式规范"
+          },
+          "purposeAlignment": {
+            "score": 5,
+            "reason": "完美符合'Get started quickly'目标，30分钟内可完成，跳过理论背景"
+          },
+          "audienceAlignment": {
+            "score": 5,
+            "reason": "完全符合开发者集成需求，代码可直接复制使用，技术准确性高"
+          },
+          "knowledgeLevelAlignment": {
+            "score": 5,
+            "reason": "适合有类似工具经验的读者，重点突出Tokio特性，跳过基础概念"
+          }
+        }
+      },
+      {
+        "documentInfo": {
+          "path": "/tasks-scheduling",
+          "title": "Tasks & Scheduling"
+        },
+        "evaluation": {
+          "readability": {
+            "score": 4,
+            "reason": "整体语言清晰流畅，但存在少量问题：'派发'应为'分发'，'协程'后应加'coroutine'英文对照"
+          },
+          "coherence": {
+            "score": 5,
+            "reason": "逻辑结构清晰，从概念介绍到具体功能模块递进自然，各章节之间衔接合理"
+          },
+          "contentQuality": {
+            "score": 4,
+            "reason": "覆盖了Tokio任务管理的核心概念，提供了清晰的模块导航，但缺少快速示例代码让读者立即上手"
+          },
+          "translationQuality": {
+            "score": 4,
+            "reason": "翻译准确自然，术语统一，但'goroutine'和'coroutine'等专业术语建议保留英文或加注"
+          },
+          "consistency": {
+            "score": 5,
+            "reason": "术语使用一致（任务、运行时、调度器），格式统一，风格保持专业技术文档特征"
+          },
+          "purposeAlignment": {
+            "score": 4,
+            "reason": "作为任务概览页面，很好地引导读者进入具体任务，但对于'快速开始'目标缺少即时可运行的代码示例"
+          },
+          "audienceAlignment": {
+            "score": 5,
+            "reason": "完全符合开发者需求：技术术语准确，直接切入技术要点，提供清晰的API概念导航"
+          },
+          "knowledgeLevelAlignment": {
+            "score": 5,
+            "reason": "非常适合有类似工具经验的读者：通过与Go/Kotlin对比帮助理解，突出Tokio独特优势，跳过基础概念"
+          }
+        }
+      },
+      {
+        "documentInfo": {
+          "path": "/tasks-scheduling/spawning",
+          "title": "Spawning & Managing Tasks"
+        },
+        "evaluation": {
+          "readability": {
+            "score": 5,
+            "reason": "语言清晰流畅，无语法错误，中英文混排自然，术语翻译准确，句子结构清晰易读"
+          },
+          "coherence": {
+            "score": 5,
+            "reason": "逻辑结构完整，从基础到进阶递进清晰，各节之间衔接自然，代码示例与说明紧密配合"
+          },
+          "contentQuality": {
+            "score": 5,
+            "reason": "完整覆盖spawn、spawn_local、spawn_blocking、JoinHandle和JoinSet，代码示例丰富实用，可直接复制使用"
+          },
+          "translationQuality": {
+            "score": 5,
+            "reason": "术语翻译准确统一（任务、生成、阻塞等），保留必要英文术语，注释翻译恰当，符合中文表达习惯"
+          },
+          "consistency": {
+            "score": 5,
+            "reason": "术语使用一致，代码格式统一，表格样式规范，中英文标点符号使用正确"
+          },
+          "purposeAlignment": {
+            "score": 5,
+            "reason": "完美契合'Complete specific tasks'目标，提供了spawn任务的完整工作流程和实际场景，步骤清晰"
+          },
+          "audienceAlignment": {
+            "score": 5,
+            "reason": "代码优先，所有示例可直接复制使用，技术准确度高，完全符合开发者集成需求"
+          },
+          "knowledgeLevelAlignment": {
+            "score": 5,
+            "reason": "重点突出与其他异步框架的差异（Send/!Send、JoinSet等Tokio特性），跳过基础概念，效率高"
+          }
+        }
+      },
+      {
+        "documentInfo": {
+          "path": "/tasks-scheduling/synchronization",
+          "title": "Synchronization Primitives"
+        },
+        "evaluation": {
+          "readability": {
+            "score": 5,
+            "reason": "文档语言清晰流畅，术语使用准确，语法无误，句子结构清晰易读"
+          },
+          "coherence": {
+            "score": 5,
+            "reason": "逻辑结构清晰，从概述到分类再到具体原语，层次分明，各部分衔接自然"
+          },
+          "contentQuality": {
+            "score": 5,
+            "reason": "完整覆盖了同步原语的各种类型，每个都有清晰说明和可运行示例代码，实现了规划目标"
+          },
+          "translationQuality": {
+            "score": 4,
+            "reason": "整体翻译准确流畅，但有少量术语不一致：如'生成任务'应为'spawn任务'，'背压'可保留backpressure"
+          },
+          "consistency": {
+            "score": 5,
+            "reason": "术语使用统一，代码示例风格一致，格式规范，整体保持良好一致性"
+          },
+          "purposeAlignment": {
+            "score": 5,
+            "reason": "完美符合'Complete specific tasks'目标，提供了详细的步骤指导和实用示例"
+          },
+          "audienceAlignment": {
+            "score": 5,
+            "reason": "完全符合开发者需求，代码示例可直接复制使用，技术描述准确，API用法清晰"
+          },
+          "knowledgeLevelAlignment": {
+            "score": 5,
+            "reason": "适合有经验的开发者，重点介绍Tokio特性和与标准库差异，跳过基础概念，效率高"
+          }
+        }
+      },
+      {
+        "documentInfo": {
+          "path": "/tasks-scheduling/time",
+          "title": "Time, Delays, and Timeouts"
+        },
+        "evaluation": {
+          "readability": {
+            "score": 5,
+            "reason": "文档语言流畅自然，术语翻译准确统一，无语法拼写错误，句子结构清晰易读"
+          },
+          "coherence": {
+            "score": 5,
+            "reason": "内容逻辑结构清晰，从基础概念到具体用法循序渐进，各部分衔接自然，无逻辑跳跃"
+          },
+          "contentQuality": {
+            "score": 5,
+            "reason": "完整覆盖了时间操作的三个核心组件，每个API都提供了实用代码示例，包含重要注意事项和错误处理"
+          },
+          "translationQuality": {
+            "score": 5,
+            "reason": "翻译准确自然，术语统一（如Sleep、Interval、Timeout），代码注释恰当翻译，保留了必要的英文术语"
+          },
+          "consistency": {
+            "score": 5,
+            "reason": "术语使用一致，代码示例风格统一，格式规范，表格样式一致"
+          },
+          "purposeAlignment": {
+            "score": 5,
+            "reason": "完美符合'Complete specific tasks'目标，提供了详细的步骤指引和实际使用场景，可直接应用"
+          },
+          "audienceAlignment": {
+            "score": 5,
+            "reason": "完全符合开发者需求，提供了大量可复制粘贴的代码示例，技术准确性高，配置说明清晰"
+          },
+          "knowledgeLevelAlignment": {
+            "score": 5,
+            "reason": "非常适合有类似工具经验的读者，重点介绍Tokio特有功能（如MissedTickBehavior），对比了与std::thread::sleep的差异"
+          }
+        }
+      },
+      {
+        "documentInfo": {
+          "path": "/tasks-scheduling/runtime",
+          "title": "The Runtime"
+        },
+        "evaluation": {
+          "readability": {
+            "score": 4,
+            "reason": "英文原文清晰流畅，中文翻译基本准确自然，但存在少量不够地道的表达，如'生成一个新的异步任务'可改为'创建新的异步任务'"
+          },
+          "coherence": {
+            "score": 5,
+            "reason": "逻辑结构清晰，从运行时概念到快速入门，再到手动管理、调度器选择、配置、句柄使用和关闭，层层递进，无逻辑跳跃"
+          },
+          "contentQuality": {
+            "score": 5,
+            "reason": "完整覆盖规划目标，详细介绍了运行时概念、调度器类型和配置方法，提供了实用代码示例，可直接复制使用"
+          },
+          "translationQuality": {
+            "score": 4,
+            "reason": "翻译基本准确，术语统一，但部分表达不够自然，如'工作窃取(work-stealing)'的括号使用不一致，代码注释保留英文未翻译"
+          },
+          "consistency": {
+            "score": 4,
+            "reason": "术语和格式基本一致，但代码块标题风格有差异：部分用中文如'一个简单的TCP回显服务器'，部分用英文如'Custom runtime configuration'"
+          },
+          "purposeAlignment": {
+            "score": 5,
+            "reason": "完全符合'完成特定任务'目标，提供了创建和配置运行时的详细步骤指导，包含多种场景的实用代码示例"
+          },
+          "audienceAlignment": {
+            "score": 5,
+            "reason": "完全符合开发者集成需求，代码示例丰富且可直接使用，技术细节准确，配置选项说明清晰"
+          },
+          "knowledgeLevelAlignment": {
+            "score": 5,
+            "reason": "完美匹配'使用过类似工具'的读者，突出了Tokio特有功能如工作窃取调度器，对比了不同调度策略，跳过了异步基础概念"
+          }
+        }
+      },
+      {
+        "documentInfo": {
+          "path": "/io",
+          "title": "Asynchronous I/O"
+        },
+        "evaluation": {
+          "readability": {
+            "score": 5,
+            "reason": "语言清晰流畅，无语法错误，技术术语使用准确，代码示例格式规范"
+          },
+          "coherence": {
+            "score": 5,
+            "reason": "逻辑结构清晰，从核心概念到具体实现，再到资源列表，层次分明，无跳跃或矛盾"
+          },
+          "contentQuality": {
+            "score": 5,
+            "reason": "完整覆盖异步I/O核心概念，提供了可直接使用的代码示例，准确解释了AsyncRead/AsyncWrite trait"
+          },
+          "translationQuality": {
+            "score": 5,
+            "reason": "不适用，这是原创英文文档，无翻译内容"
+          },
+          "consistency": {
+            "score": 5,
+            "reason": "术语使用一致（如AsyncRead、AsyncWrite），代码示例风格统一，格式规范"
+          },
+          "purposeAlignment": {
+            "score": 4,
+            "reason": "作为快速开始文档表现优秀，但缺少安装步骤和环境配置，不能真正30分钟内从零开始"
+          },
+          "audienceAlignment": {
+            "score": 5,
+            "reason": "完全符合API集成开发者需求，代码示例可直接复制使用，技术准确性高"
+          },
+          "knowledgeLevelAlignment": {
+            "score": 5,
+            "reason": "适合有异步编程经验的开发者，重点强调了与std::io的差异，突出Tokio特性"
+          }
+        }
+      },
+      {
+        "documentInfo": {
+          "path": "/io/networking",
+          "title": "Networking"
+        },
+        "evaluation": {
+          "readability": {
+            "score": 3,
+            "reason": "存在多个拼写错误：3个'asyn'应为'async'；代码示例格式不一致；部分句子较长需要重读"
+          },
+          "coherence": {
+            "score": 4,
+            "reason": "整体逻辑清晰，从TCP到UDP再到UDS的顺序合理，但最后一句跳转到文件系统操作略显突兀"
+          },
+          "contentQuality": {
+            "score": 4,
+            "reason": "覆盖了TCP、UDP和UDS三大网络原语，提供了实用代码示例，但缺少错误处理、性能优化等实际使用细节"
+          },
+          "translationQuality": {
+            "score": 4,
+            "reason": "翻译准确流畅，术语统一，但'对等节点'(peer)、'数据报'等个别术语可以更通俗"
+          },
+          "consistency": {
+            "score": 4,
+            "reason": "术语和格式基本一致，但代码示例中的icon标记格式不统一，有些有icon有些没有"
+          },
+          "purposeAlignment": {
+            "score": 4,
+            "reason": "符合'完成特定任务'目标，提供了实际使用步骤和代码示例，但缺少常见错误处理场景"
+          },
+          "audienceAlignment": {
+            "score": 5,
+            "reason": "完全符合开发者集成需求，代码优先、可直接复制使用，技术准确性高"
+          },
+          "knowledgeLevelAlignment": {
+            "score": 5,
+            "reason": "适合有类似工具经验的读者，直接展示Tokio特有用法，跳过了基础网络概念，突出与其他框架差异"
+          }
+        }
+      },
+      {
+        "documentInfo": {
+          "path": "/io/fs",
+          "title": "Filesystem"
+        },
+        "evaluation": {
+          "readability": {
+            "score": 5,
+            "reason": "中文翻译流畅自然，无语法错误，专业术语使用准确，代码示例格式规范"
+          },
+          "coherence": {
+            "score": 5,
+            "reason": "结构层次清晰，从原理介绍到快速入门再到高级用法，逻辑递进合理，各部分衔接自然"
+          },
+          "contentQuality": {
+            "score": 5,
+            "reason": "完整覆盖异步文件操作所有方面，提供丰富的代码示例，包含性能优化策略和注意事项"
+          },
+          "translationQuality": {
+            "score": 5,
+            "reason": "翻译准确忠实原文，术语统一（如spawn_blocking、trait等保留英文），符合中文技术文档习惯"
+          },
+          "consistency": {
+            "score": 5,
+            "reason": "术语使用一致，代码示例格式统一，卡片组件风格一致，整体风格保持专业技术文档特征"
+          },
+          "purposeAlignment": {
+            "score": 5,
+            "reason": "完美符合'完成特定任务'目标，提供了读写文件的完整工作流程和实用示例"
+          },
+          "audienceAlignment": {
+            "score": 5,
+            "reason": "面向开发者的代码优先风格，所有示例可直接复制使用，技术细节准确"
+          },
+          "knowledgeLevelAlignment": {
+            "score": 5,
+            "reason": "适合有异步编程经验的开发者，重点讲解tokio特有功能和与std::fs的差异，跳过基础概念"
+          }
+        }
+      },
+      {
+        "documentInfo": {
+          "path": "/io/process",
+          "title": "Child Processes"
+        },
+        "evaluation": {
+          "readability": {
+            "score": 4,
+            "reason": "整体语言清晰流畅，但标题中文翻译缺失（如'Spawning a Command'），影响中文用户阅读体验"
+          },
+          "coherence": {
+            "score": 5,
+            "reason": "逻辑结构清晰，从基础到高级循序渐进，各部分衔接自然无跳跃"
+          },
+          "contentQuality": {
+            "score": 5,
+            "reason": "完整覆盖了异步子进程管理的核心内容，提供了丰富的代码示例，可直接复制使用"
+          },
+          "translationQuality": {
+            "score": 4,
+            "reason": "翻译准确自然，但代码块标题未翻译（如'Spawning a Command'），术语翻译一致"
+          },
+          "consistency": {
+            "score": 4,
+            "reason": "术语和格式基本一致，但代码块标题保留英文与其他中文内容风格不统一"
+          },
+          "purposeAlignment": {
+            "score": 5,
+            "reason": "完美符合'完成特定任务'目标，提供了清晰的步骤指导和实用场景示例"
+          },
+          "audienceAlignment": {
+            "score": 5,
+            "reason": "完全符合开发者需求，代码示例丰富，可直接复制使用，技术准确性高"
+          },
+          "knowledgeLevelAlignment": {
+            "score": 5,
+            "reason": "非常适合'使用过类似工具'的读者，重点突出Tokio特有功能，与标准库对比清晰"
+          }
+        }
+      },
+      {
+        "documentInfo": {
+          "path": "/io/signals",
+          "title": "OS Signals"
+        },
+        "evaluation": {
+          "readability": {
+            "score": 5,
+            "reason": "语言清晰流畅，无语法错误，术语准确统一，中文翻译自然地道"
+          },
+          "coherence": {
+            "score": 5,
+            "reason": "结构逻辑清晰，从概述到Unix信号再到Windows信号，循序渐进，各部分衔接自然"
+          },
+          "contentQuality": {
+            "score": 5,
+            "reason": "完整覆盖了异步处理Unix和Windows信号的核心内容，提供了丰富的代码示例和重要注意事项"
+          },
+          "translationQuality": {
+            "score": 5,
+            "reason": "翻译准确自然，技术术语如'信号''监听器''优雅关闭'等保持一致，符合中文技术文档习惯"
+          },
+          "consistency": {
+            "score": 5,
+            "reason": "术语使用一致，格式统一，代码示例风格一致，图标卡片样式统一"
+          },
+          "purposeAlignment": {
+            "score": 5,
+            "reason": "完美符合'完成特定任务'目标，提供了详细的分步指导和实用场景示例"
+          },
+          "audienceAlignment": {
+            "score": 5,
+            "reason": "完全符合开发者需求，代码示例可直接复制使用，技术准确性高"
+          },
+          "knowledgeLevelAlignment": {
+            "score": 5,
+            "reason": "适合有类似工具经验的读者，突出了Tokio特有功能如永久处理程序和信号合并等差异点"
+          }
+        }
+      },
+      {
+        "documentInfo": {
+          "path": "/configuration",
+          "title": "Configuration"
+        },
+        "evaluation": {
+          "readability": {
+            "score": 5,
+            "reason": "语言清晰流畅，无语法错误，术语准确，句子结构简洁明了"
+          },
+          "coherence": {
+            "score": 5,
+            "reason": "结构逻辑清晰，从总览到各个子主题递进自然，卡片式导航设计合理"
+          },
+          "contentQuality": {
+            "score": 4,
+            "reason": "覆盖了配置的核心方面，但缺少实际配置示例和常见配置场景的具体指导"
+          },
+          "translationQuality": {
+            "score": 5,
+            "reason": "翻译准确自然，术语统一（如feature flags译为功能标志），符合中文表达习惯"
+          },
+          "consistency": {
+            "score": 5,
+            "reason": "术语使用一致，格式统一，各子文档风格保持一致"
+          },
+          "purposeAlignment": {
+            "score": 4,
+            "reason": "符合'Complete specific tasks'目标，提供了配置指导，但步骤说明可以更详细"
+          },
+          "audienceAlignment": {
+            "score": 5,
+            "reason": "完全符合开发者受众需求，提供了代码示例、命令行配置等技术内容"
+          },
+          "knowledgeLevelAlignment": {
+            "score": 5,
+            "reason": "适合有类似工具经验的读者，重点介绍了Tokio特有的配置方式和注意事项"
+          }
+        }
+      },
+      {
+        "documentInfo": {
+          "path": "/configuration/features",
+          "title": "Feature Flags"
+        },
+        "evaluation": {
+          "readability": {
+            "score": 5,
+            "reason": "语言清晰流畅，无语法错误，术语使用准确，代码示例格式良好"
+          },
+          "coherence": {
+            "score": 5,
+            "reason": "逻辑结构清晰，从整体建议到具体标志列表层次分明，前后呼应完整"
+          },
+          "contentQuality": {
+            "score": 4,
+            "reason": "覆盖了功能标志的主要内容，表格清晰，但缺少具体使用示例和场景对比"
+          },
+          "translationQuality": {
+            "score": 5,
+            "reason": "翻译准确自然，术语统一，技术概念表达地道"
+          },
+          "consistency": {
+            "score": 5,
+            "reason": "术语、格式、风格完全一致，表格格式统一"
+          },
+          "purposeAlignment": {
+            "score": 4,
+            "reason": "符合'完成特定任务'目标，提供了配置指导，但缺少更多实际工作流程示例"
+          },
+          "audienceAlignment": {
+            "score": 5,
+            "reason": "完全符合开发者需求，提供了可直接复制的配置代码，技术准确性高"
+          },
+          "knowledgeLevelAlignment": {
+            "score": 5,
+            "reason": "适合有类似工具经验的用户，突出了与其他工具的差异（模块化设计），避免了基础概念解释"
+          }
+        }
+      },
+      {
+        "documentInfo": {
+          "path": "/configuration/platforms",
+          "title": "Platform Support"
+        },
+        "evaluation": {
+          "readability": {
+            "score": 5,
+            "reason": "中文翻译流畅自然，术语准确，段落结构清晰，无语法错误"
+          },
+          "coherence": {
+            "score": 5,
+            "reason": "文档结构逻辑清晰，从保证支持到其他平台再到WASM支持，层次分明，无逻辑跳跃"
+          },
+          "contentQuality": {
+            "score": 4,
+            "reason": "覆盖了平台支持的核心信息，但缺少具体的代码示例和配置方法，对于开发者集成略显不足"
+          },
+          "translationQuality": {
+            "score": 5,
+            "reason": "翻译准确忠实原文，技术术语保持一致，符合中文技术文档习惯"
+          },
+          "consistency": {
+            "score": 5,
+            "reason": "术语使用一致，格式规范统一，表格样式保持一致"
+          },
+          "purposeAlignment": {
+            "score": 3,
+            "reason": "作为参考文档提供了平台支持信息，但缺少快速开始所需的具体步骤和代码示例"
+          },
+          "audienceAlignment": {
+            "score": 3,
+            "reason": "提供了技术信息但缺少开发者最需要的代码示例、配置片段和集成指南"
+          },
+          "knowledgeLevelAlignment": {
+            "score": 4,
+            "reason": "适合有经验的开发者理解差异和限制，但对于迁移场景缺少具体对比说明"
+          }
+        }
+      },
+      {
+        "documentInfo": {
+          "path": "/configuration/unstable",
+          "title": "Unstable Features"
+        },
+        "evaluation": {
+          "readability": {
+            "score": 4,
+            "reason": "翻译基本流畅自然，但有个别生硬表达如'显式选择启用'应为'显式选择加入'，'破坏性变更'更常用'重大变更'，整体不影响阅读理解"
+          },
+          "coherence": {
+            "score": 5,
+            "reason": "文档结构清晰，从概念介绍到启用方法再到具体功能列表，逻辑递进合理，各部分衔接自然无跳跃"
+          },
+          "contentQuality": {
+            "score": 5,
+            "reason": "完整覆盖了内容规划的要求，提供了两种启用方式的详细步骤和代码示例，包含警告提示和限制说明，开发者可直接复制使用"
+          },
+          "translationQuality": {
+            "score": 4,
+            "reason": "翻译基本准确，术语统一，但'不稳定功能'的翻译可考虑使用更常见的'实验性功能'，个别表达如'按 crate 启用'可优化为'按包启用'"
+          },
+          "consistency": {
+            "score": 5,
+            "reason": "术语使用一致（tokio_unstable、功能标志、API等），格式统一（代码块、表格、警告框），风格保持技术文档的专业性"
+          },
+          "purposeAlignment": {
+            "score": 5,
+            "reason": "完全符合'完成特定任务'目标，提供了清晰的步骤说明和实际操作指南，开发者可按步骤启用不稳定功能"
+          },
+          "audienceAlignment": {
+            "score": 5,
+            "reason": "完全符合开发者受众需求，提供了可直接复制的代码片段、配置示例和命令行指令，技术准确性高"
+          },
+          "knowledgeLevelAlignment": {
+            "score": 5,
+            "reason": "非常适合'使用过类似工具'的读者，直接介绍Tokio特有的不稳定功能机制，无冗余基础解释，突出了与常规功能的差异"
+          }
+        }
+      },
+      {
+        "documentInfo": {
+          "path": "/project",
+          "title": "Project Information"
+        },
+        "evaluation": {
+          "readability": {
+            "score": 4,
+            "reason": "语言清晰流畅，但存在少量问题：'在开始之前'应为'开始之前'，部分句子略显生硬如'其中提供了参与所需的所有信息'"
+          },
+          "coherence": {
+            "score": 5,
+            "reason": "逻辑结构清晰，从项目介绍→获取帮助→贡献→相关项目→许可证，前后呼应，无矛盾或跳跃"
+          },
+          "contentQuality": {
+            "score": 4,
+            "reason": "覆盖了项目信息的主要方面，提供了具体的链接和资源，但缺少一些对API集成开发者重要的细节，如版本兼容性、迁移指南等"
+          },
+          "translationQuality": {
+            "score": 4,
+            "reason": "翻译准确自然，术语统一，但个别地方如'参与贡献'可改为更常用的'贡献代码'，'易用性'在技术文档中通常用'人性化'"
+          },
+          "consistency": {
+            "score": 5,
+            "reason": "术语、风格、格式完全一致，项目名称、链接格式、列表样式等保持统一"
+          },
+          "purposeAlignment": {
+            "score": 3,
+            "reason": "作为项目介绍页面符合'找答案'目的，但对于'快速开始'和'完成特定任务'两个目的缺少具体的入门步骤和实际操作指导"
+          },
+          "audienceAlignment": {
+            "score": 4,
+            "reason": "适合开发者集成，提供了技术资源链接和相关库信息，但缺少代码示例、配置片段等开发者最需要的即用内容"
+          },
+          "knowledgeLevelAlignment": {
+            "score": 4,
+            "reason": "适合有类似工具经验的读者，介绍了Tokio生态系统的独特组成，但缺少与其他异步框架的对比或迁移指南"
+          }
+        }
+      },
+      {
+        "documentInfo": {
+          "path": "/project/contributing",
+          "title": "Contributing & Support"
+        },
+        "evaluation": {
+          "readability": {
+            "score": 4,
+            "reason": "中文翻译流畅自然，仅有个别词汇选择不够地道（如'向后移植'可改为'反向移植'），整体阅读体验良好"
+          },
+          "coherence": {
+            "score": 5,
+            "reason": "文档结构清晰，从获取帮助到贡献指南再到项目策略，逻辑递进自然，各部分衔接合理"
+          },
+          "contentQuality": {
+            "score": 5,
+            "reason": "完整实现内容规划，提供了贡献指南链接、MSRV策略、发布计划、LTS版本列表和社区资源，信息准确详实"
+          },
+          "translationQuality": {
+            "score": 4,
+            "reason": "翻译准确忠实原文，术语基本一致，仅有少量表达可优化（如'错误修复策略'可改为'缺陷修复策略'）"
+          },
+          "consistency": {
+            "score": 5,
+            "reason": "术语使用统一（MSRV、LTS等保持英文缩写），格式规范，表格样式一致"
+          },
+          "purposeAlignment": {
+            "score": 3,
+            "reason": "作为贡献指南，不符合'快速开始'或'查找答案'的目标，但也不是完成特定任务的指南，定位略显模糊"
+          },
+          "audienceAlignment": {
+            "score": 5,
+            "reason": "完全符合开发者受众需求，提供了技术准确的版本信息、Cargo.toml配置示例和GitHub链接"
+          },
+          "knowledgeLevelAlignment": {
+            "score": 5,
+            "reason": "内容深度适合使用过类似工具的读者，重点介绍了Tokio特有的MSRV和LTS策略，没有赘述基础概念"
+          }
+        }
+      },
+      {
+        "documentInfo": {
+          "path": "/project/changelog",
+          "title": "Changelog"
+        },
+        "evaluation": {
+          "readability": {
+            "score": 4,
+            "reason": "整体语言清晰，格式规范，但存在少量拼写错误（如August写成8月但年份仍为2025）和日期不一致问题"
+          },
+          "coherence": {
+            "score": 5,
+            "reason": "逻辑清晰，按版本号倒序排列，每个版本的变更分类明确（Fixed/Added/Changed等），前后呼应良好"
+          },
+          "contentQuality": {
+            "score": 5,
+            "reason": "详细记录了每个版本的所有变更，包含PR链接，内容准确完整，开发者可直接查阅相关改动"
+          },
+          "translationQuality": {
+            "score": 4,
+            "reason": "翻译准确自然，术语统一，但部分技术术语保留英文可能更合适（如panic、future等），日期格式不一致"
+          },
+          "consistency": {
+            "score": 4,
+            "reason": "版本格式和分类标签基本一致，但日期格式存在不一致：有些用英文月份，有些用中文月份"
+          },
+          "purposeAlignment": {
+            "score": 5,
+            "reason": "完全符合'查找答案'目标，提供了全面的版本变更记录，便于开发者快速定位特定版本的改动"
+          },
+          "audienceAlignment": {
+            "score": 5,
+            "reason": "完全符合开发者需求，包含详细的API变更、修复内容和PR链接，技术准确度高"
+          },
+          "knowledgeLevelAlignment": {
+            "score": 5,
+            "reason": "适合有经验的开发者，直接列出技术变更而不做过多解释，符合'使用过类似工具'的知识水平"
+          }
+        }
+      }
+    ],
+    "aggregated": {
+      "readability": {
+        "score": 4.5,
+        "reason": "Average from 19 documents: 语言清晰流畅，中文翻译自然，无语法错误，专业术语使用准确; 语言清晰流畅，无语法错误，句子结构自然，专业术语使用准确; 整体语言清晰流畅，但存在少量问题：'派发'应为'分发'，'协程'后应加'coroutine'英文对照"
+      },
+      "coherence": {
+        "score": 4.9,
+        "reason": "Average from 19 documents: 逻辑结构清晰：概述→核心组件→示例→后续步骤，内容衔接自然，无逻辑跳跃; 逻辑层次分明，从项目设置到代码实现再到运行测试，步骤清晰连贯; 逻辑结构清晰，从概念介绍到具体功能模块递进自然，各章节之间衔接合理"
+      },
+      "contentQuality": {
+        "score": 4.6,
+        "reason": "Average from 19 documents: 覆盖了规划中的主要内容（介绍、特性、核心组件），但缺少调度器和反应器的具体技术细节; 完整实现快速入门目标，提供可运行代码示例，包含详细代码解读; 覆盖了Tokio任务管理的核心概念，提供了清晰的模块导航，但缺少快速示例代码让读者立即上手"
+      },
+      "translationQuality": {
+        "score": 4.5,
+        "reason": "Average from 19 documents: 翻译准确自然，术语一致（如runtime统一译为运行时），符合中文表达习惯; 翻译准确自然，术语统一，符合中文技术文档习惯; 翻译准确自然，术语统一，但'goroutine'和'coroutine'等专业术语建议保留英文或加注"
+      },
+      "consistency": {
+        "score": 4.8,
+        "reason": "Average from 19 documents: 术语、格式、风格完全一致，代码示例和文档结构规范统一; 术语、格式、代码风格完全一致，markdown格式规范; 术语使用一致（任务、运行时、调度器），格式统一，风格保持专业技术文档特征"
+      },
+      "purposeAlignment": {
+        "score": 4.4,
+        "reason": "Average from 19 documents: 完美匹配'快速开始'目标：30分钟内从零到运行示例，提供了可直接运行的代码; 完美符合'Get started quickly'目标，30分钟内可完成，跳过理论背景; 作为任务概览页面，很好地引导读者进入具体任务，但对于'快速开始'目标缺少即时可运行的代码示例"
+      },
+      "audienceAlignment": {
+        "score": 4.8,
+        "reason": "Average from 19 documents: 完全符合开发者需求：代码优先，示例可复制粘贴，技术准确，包含API使用方法; 完全符合开发者集成需求，代码可直接复制使用，技术准确性高; 完全符合开发者需求：技术术语准确，直接切入技术要点，提供清晰的API概念导航"
+      },
+      "knowledgeLevelAlignment": {
+        "score": 4.9,
+        "reason": "Average from 19 documents: 适合有类似工具经验的读者：突出Tokio独特优势，跳过基础概念，强调与其他框架的差异; 适合有类似工具经验的读者，重点突出Tokio特性，跳过基础概念; 非常适合有类似工具经验的读者：通过与Go/Kotlin对比帮助理解，突出Tokio独特优势，跳过基础概念"
+      }
+    }
+  },
+  "summary": {
+    "structureScores": {
+      "purposeCoverage": 4,
+      "audienceCoverage": 4,
+      "coverageDepthAlignment": 5,
+      "average": 4.3
+    },
+    "documentScores": {
+      "readability": 4.5,
+      "coherence": 4.9,
+      "contentQuality": 4.6,
+      "translationQuality": 4.5,
+      "consistency": 4.8,
+      "purposeAlignment": 4.4,
+      "audienceAlignment": 4.8,
+      "knowledgeLevelAlignment": 4.9,
+      "average": 4.7
+    },
+    "overallScore": 4.5,
+    "issues": [
+      "Missing purposes: 快速开始的30分钟目标可能过于乐观 - 当前结构包含太多概念, 缺少常见任务的快速索引或最佳实践汇总",
+      "Missing audiences: 缺少针对不同集成场景的专门指南（如微服务、Web应用、CLI工具）, 没有提供常见集成模式的最佳实践"
+    ]
+  }
+}
